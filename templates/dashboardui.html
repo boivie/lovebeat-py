@@ -19,7 +19,7 @@
 {% for service in services -%}
 	  <tr>
 	    <td class="status"><img class="status" src="/static/{{service.status}}-16.png" width="16" height="16"></td>
-	    <td>{{service.sid}}</td>
+	    <td><a href="{{url_for('.edit_service', sid=service.sid)}}">{{service.sid}}</a></td>
 	    <td>
 {%- if service.status == "ok" -%}
 Service is running normally.

@@ -28,24 +28,42 @@ def before_request():
     g.db = conn()
 
 
-@app.route("/s/<sid>", methods = ["GET", "POST"])
-def update(sid):
-    now = int(time.time())
+def get_old_data(sid):
     old_lbls, old_maint = g.db.hmget("lb:s:%s" % sid, "lbls", "maint")
     old_lbls = old_lbls or ""
     old_lbls = set([l for l in old_lbls.split(",") if l])
-    new_lbls = set([])
-    if request.form.get('labels'):
-        new_lbls = [l.strip() for l in request.form['labels'].split(',')]
-        new_lbls = set([l for l in new_lbls if l])
+    return old_lbls, old_maint
+
+
+def format_cond(items):
     conds = []
-    for key, value in request.form.items(multi=True):
+    for key, value in items:
         if key == 'error':
             conds.append('e:%s' % value)
         elif key == 'warning':
             conds.append('w:%s' % value)
-    cond = ';'.join(conds)
-    new_maint = request.form.get('maint')
+    return ';'.join(conds)
+
+
+def format_lbls(req):
+    if req:
+        new_lbls = [l.strip() for l in req.split(',')]
+        return set([l for l in new_lbls if l])
+    return set([])
+
+
+def format_maint(req):
+    return req
+
+
+@app.route("/s/<sid>", methods = ["GET", "POST"])
+def update(sid):
+    now = int(time.time())
+    old_lbls, old_maint = get_old_data(sid)
+    new_lbls = format_lbls(request.form.get('labels'))
+    cond = format_cond(request.form.items(multi=True))
+    new_maint = format_maint(request.form.get('maint'))
+
     with g.db.pipeline() as pipe:
         pipe.sadd("lb:services:all", sid)
         # Remove 'soft maintentance' if we get a good status
@@ -70,7 +88,7 @@ def update(sid):
             pipe.ltrim("lb:s:%s:h" % sid, 0, MAX_SAVED - 1)
             pipe.hset("lb:s:%s" % sid, "lval", '1')
             pipe.hset("lb:s:%s" % sid, "ts", now)
-            if conds:
+            if cond:
                 pipe.hset("lb:s:%s" % sid, "cond", cond)
         pipe.execute()
     return "ok"
@@ -132,6 +150,7 @@ def get_services(lbl):
             status = 'warning'
         services.append({'sid': sid, 'ts': ts, 'status': status,
                          'warnings': warnings, 'errors': errors})
+    services.sort(lambda a, b: cmp(a['sid'], b['sid']))
     return services
 
 
