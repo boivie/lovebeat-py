@@ -121,9 +121,12 @@ def get_list_raw():
     services = get_services("all")
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0
-    return render_template("dashboard.html", services=services,
+    html = render_template("dashboard.html", services=services,
                            has_warnings=has_warnings,
                            has_errors=has_errors)
+    resp = make_response(html)
+    resp.headers["Content-type"] = "text/plain"
+    return resp
 
 
 if app.debug:
