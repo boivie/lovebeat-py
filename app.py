@@ -2,6 +2,7 @@ import logging
 import time
 
 from flask import Flask, g, render_template, request, make_response, jsonify
+from flask import redirect, url_for
 import redis
 
 MAX_SAVED = 100
@@ -114,7 +115,7 @@ def get_list(lbl):
 
 @app.route("/dashboard/", methods = ["GET"])
 def get_list_all():
-    return get_list('all')
+    return redirect(url_for('.get_list', lbl='all'))
 
 
 @app.route("/dashboard/<lbl>/raw", methods = ["GET"])
