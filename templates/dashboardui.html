@@ -10,7 +10,6 @@
 	    <th style="width: 39px;">Current Status</th>
 	    <th style="width: 250px;">Service</th>
 	    <th style="width: 450px;">Comment</th>
-	    <th style="width: 30px;">RSS</th>
 	  </tr>
 	</thead>
 	<tbody>
@@ -26,7 +25,6 @@ Service is running normally.
 {%- elif service.status == "error" -%}
 {{service.errors[0]}}
 {%- endif -%}</td>
-	    <td><img src="/static/rss.png" width="23" height="21"></td>
 	  </tr>
 {% endfor -%}
 	</tbody>

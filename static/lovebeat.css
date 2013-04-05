@@ -28,7 +28,10 @@ table {
     border-spacing: 2px;
     border-color: gray;
     font-size: 12px;
-    padding: 0;
+}
+
+.table td {
+    padding: 4px 10px 4px 10px;
 }
 
 .table tr:nth-child(even) {
@@ -40,6 +43,8 @@ border: 0;
 border-bottom: 1px solid #535353;
 border-collapse: collapse;
 margin: 0px 0px 5px 0px;
+border-spacing: 2px;
+border-color: gray;
 }
 
 .status {
