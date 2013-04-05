@@ -55,7 +55,7 @@ def update(sid):
         pipe.lpush("lb:s:%s:h" % sid, '%d:1' % now)
         pipe.ltrim("lb:s:%s:h" % sid, 0, MAX_SAVED - 1)
         pipe.hset("lb:s:%s" % sid, "lval", '1')
-        pipe.hset("lb:s:%s" % sid, "lts", now)
+        pipe.hset("lb:s:%s" % sid, "ts", now)
         if conds:
             pipe.hset("lb:s:%s" % sid, "cond", cond)
         pipe.execute()
@@ -70,33 +70,33 @@ def parse_conds(cond):
     return conds
 
 
-def eval_conds(conds, lval, lts, now):
+def eval_conds(conds, lval, ts, now):
     errors = []
     warnings = []
     for t, key, expr in conds:
         l = errors if t == 'e' else warnings
         if key == 'heartbeat':
             limit = int(expr)
-            if (now - lts) > limit:
+            if (now - ts) > limit:
                 m = "Heartbeat last seen %d seconds ago, limit = %d seconds"
-                l.append(m % (now - lts, limit))
+                l.append(m % (now - ts, limit))
     return warnings, errors
 
 
 def get_services(lbl):
     now = int(time.time())
-    fields = ("#", "lb:s:*->lval", "lb:s:*->lts", "lb:s:*->cond")
+    fields = ("#", "lb:s:*->lval", "lb:s:*->ts", "lb:s:*->cond")
     services = []
-    for sid, lval, lts, cond in chunks(g.db.sort("lb:services:%s" % lbl, get=fields), 4):
+    for sid, lval, ts, cond in chunks(g.db.sort("lb:services:%s" % lbl, get=fields), 4):
         conds = parse_conds(cond or DEFAULT_COND)
-        warnings, errors = eval_conds(conds, lval, int(lts), now)
+        warnings, errors = eval_conds(conds, lval, int(ts), now)
         if len(warnings) == 0 and len(errors) == 0:
             status = 'ok'
         elif len(errors) == 0:
             status = 'warning'
         else:
             status = 'error'
-        services.append({'sid': sid, 'lts': lts, 'status': status,
+        services.append({'sid': sid, 'ts': ts, 'status': status,
                          'warnings': warnings, 'errors': errors})
     return services
 
