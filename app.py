@@ -1,7 +1,7 @@
 import logging
 import time
 
-from flask import Flask, g, render_template, request
+from flask import Flask, g, render_template, request, make_response, jsonify
 import redis
 
 MAX_SAVED = 100
@@ -127,6 +127,12 @@ def get_list_raw():
     resp = make_response(html)
     resp.headers["Content-type"] = "text/plain"
     return resp
+
+
+@app.route("/json", methods = ["GET"])
+def get_list_json():
+    services = get_services("all")
+    return jsonify(services=services)
 
 
 if app.debug:
