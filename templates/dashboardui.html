@@ -1,0 +1,36 @@
+<html>
+  <head>
+    <link href="/static/lovebeat.css" media="all" rel="stylesheet" type="text/css">
+  </head>
+  <body>
+    <div class="container">
+      <table class="table">
+	<thead>
+	  <tr>
+	    <th style="width: 39px;">Current Status</th>
+	    <th style="width: 250px;">Service</th>
+	    <th style="width: 450px;">Comment</th>
+	    <th style="width: 30px;">RSS</th>
+	  </tr>
+	</thead>
+	<tbody>
+{% for service in services -%}
+	  <tr>
+	    <td class="status"><img class="status" src="/static/{{service.status}}-16.png" width="16" height="16"></td>
+	    <td>{{service.sid}}</td>
+	    <td>
+{%- if service.status == "ok" -%}
+Service is running normally.
+{%- elif service.status == "warning" -%}
+{{service.warnings[0]}}
+{%- elif service.status == "error" -%}
+{{service.errors[0]}}
+{%- endif -%}</td>
+	    <td><img src="/static/rss.png" width="23" height="21"></td>
+	  </tr>
+{% endfor -%}
+	</tbody>
+      </table>
+    </div>
+  </body>
+</html>

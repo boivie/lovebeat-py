@@ -1,0 +1,47 @@
+body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #4C4C4C;
+    line-height: 21px;
+    font-size: 12px;
+}
+
+.container {
+    width: 700px;
+    margin: 30px auto 0 auto;
+    text-align: center;
+}
+
+.table th {
+background-color: White;
+font-weight: normal;
+font-size: 11px;
+text-transform: uppercase;
+color: #7F7F7F;
+padding: 9px 0px 9px 0px;
+border-top: 0;
+border-bottom: 3px solid #535353;
+border-left: 0;
+border-right: 0;
+}
+table {
+    border-collapse: separate;
+    border-spacing: 2px;
+    border-color: gray;
+    font-size: 12px;
+    padding: 0;
+}
+
+.table tr:nth-child(even) {
+    background-color: #f1f1f1;
+}
+
+.table {
+border: 0;
+border-bottom: 1px solid #535353;
+border-collapse: collapse;
+margin: 0px 0px 5px 0px;
+}
+
+.status {
+text-align: center !important;
+}

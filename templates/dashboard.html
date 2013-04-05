@@ -1,0 +1,29 @@
+<html>
+ <body>
+   <pre>
+{% for service in services -%}
+{% if service.status == 'paused' -%}
+  [PAUSED] {{service.sid}}
+{% elif service.status == 'ok' -%}
+  [OK]     {{service.sid}}
+{% elif service.status == 'warning' -%}
+  [WARN]   {{service.sid}}
+{% for msg in service.warnings -%}
+&nbsp;   - {{msg}}
+{% endfor -%}
+{% elif service.status == 'error' -%}
+  [ERROR]  {{service.sid}}
+{% for msg in service.errors -%}
+&nbsp;   - {{msg}}
+{% endfor -%}
+{% else -%}
+  [INTERNAL ERROR]
+{% endif -%}
+{% endfor %}
+
+warnings: {{has_warnings}}
+errors: {{has_errors}}
+all good: {{not has_warnings and not has_errors}}
+  </pre>
+ </body>
+</html>
