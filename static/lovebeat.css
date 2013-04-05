@@ -11,8 +11,9 @@ body {
 }
 
 h1 {
-    font-size: 31.5px;
+    font-size: 35px;
     font-weight: 200;
+    letter-spacing: 1px;
 }
 
 .table th {

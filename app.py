@@ -84,6 +84,22 @@ def parse_conds(cond):
     return conds
 
 
+def ago(i):
+    s = ""
+    if i >= 86400:
+        s += "%dd" % int(i / 3600)
+        i = i % 86400
+    if i >= 3600:
+        s += "%dh" % int(i / 3600)
+        i = i % 3600
+    if i >= 60:
+        s += "%dm" % int(i / 60)
+        i = i % 60
+    if i > 0:
+        s += "%ds" % i
+    return s
+
+
 def eval_conds(conds, lval, ts, now):
     errors = []
     warnings = []
@@ -92,8 +108,8 @@ def eval_conds(conds, lval, ts, now):
         if key == 'heartbeat':
             limit = int(expr)
             if (now - ts) > limit:
-                m = "Heartbeat last seen %d seconds ago, limit = %d seconds"
-                l.append(m % (now - ts, limit))
+                m = "Heartbeat last seen %s ago, limit = %s"
+                l.append(m % (ago(now - ts), ago(limit)))
     return warnings, errors
 
 
