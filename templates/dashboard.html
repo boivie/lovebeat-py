@@ -13,10 +13,13 @@
 {% for msg in service.errors -%}
 - {{msg}}
 {% endfor -%}
+{% elif service.status == 'maint' -%}
+[MAINT] {{service.sid}}
 {% else -%}
   [INTERNAL ERROR]
 {% endif -%}
 {% endfor %}
 warnings: {{has_warnings}}
 errors: {{has_errors}}
+maint: {{has_maint}}
 all good: {{not has_warnings and not has_errors}}

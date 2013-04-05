@@ -26,6 +26,8 @@ Service is running normally.
 {{service.warnings[0]}}
 {%- elif service.status == "error" -%}
 {{service.errors[0]}}
+{%- elif service.status == "maint" -%}
+Service has a scheduled maintenance
 {%- endif -%}</td>
 	  </tr>
 {% endfor -%}
