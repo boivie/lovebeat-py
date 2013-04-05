@@ -8,7 +8,11 @@ body {
 .container {
     width: 700px;
     margin: 30px auto 0 auto;
-    text-align: center;
+}
+
+h1 {
+    font-size: 31.5px;
+    font-weight: 200;
 }
 
 .table th {

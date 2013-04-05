@@ -101,14 +101,15 @@ def get_services(lbl):
     return services
 
 
-@app.route("/dashboard/<lbl>", methods = ["GET"])
+@app.route("/dashboard/<lbl>/", methods = ["GET"])
 def get_list(lbl):
     services = get_services(lbl)
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0
     return render_template("dashboardui.html", services=services,
                            has_warnings=has_warnings,
-                           has_errors=has_errors)
+                           has_errors=has_errors,
+                           lbl=lbl)
 
 
 @app.route("/dashboard/", methods = ["GET"])
