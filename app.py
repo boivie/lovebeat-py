@@ -117,9 +117,9 @@ def get_list_all():
     return get_list('all')
 
 
-@app.route("/raw", methods = ["GET"])
-def get_list_raw():
-    services = get_services("all")
+@app.route("/dashboard/<lbl>/raw", methods = ["GET"])
+def get_list_raw(lbl):
+    services = get_services(lbl)
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0
     html = render_template("dashboard.html", services=services,
@@ -130,9 +130,9 @@ def get_list_raw():
     return resp
 
 
-@app.route("/json", methods = ["GET"])
-def get_list_json():
-    services = get_services("all")
+@app.route("/dashboard/<lbl>/json", methods = ["GET"])
+def get_list_json(lbl):
+    services = get_services(lbl)
     return jsonify(services=services)
 
 
