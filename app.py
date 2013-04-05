@@ -30,6 +30,12 @@ def before_request():
 @app.route("/s/<sid>", methods = ["GET", "POST"])
 def update(sid):
     now = int(time.time())
+    old_lbls = g.db.hget("lb:s:%s" % sid, "lbls") or ""
+    old_lbls = set([l for l in old_lbls.split(",") if l])
+    new_lbls = set([])
+    if request.form.get('labels'):
+        new_lbls = [l.strip() for l in request.form['labels'].split(',')]
+        new_lbls = set([l for l in new_lbls if l])
     conds = []
     for key, value in request.form.items(multi=True):
         if key == 'error':
@@ -38,7 +44,14 @@ def update(sid):
             conds.append('w:%s' % value)
     cond = ';'.join(conds)
     with g.db.pipeline() as pipe:
-        pipe.sadd("lb:services", sid)
+        pipe.sadd("lb:services:all", sid)
+        for lbl in new_lbls - old_lbls:
+            pipe.sadd("lb:services:%s" % lbl, sid)
+            pipe.sadd("lb:labels", lbl)
+        for lbl in old_lbls - new_lbls:
+            pipe.srem("lb:services:%s" % lbl, sid)
+        if old_lbls != new_lbls:
+            pipe.hset("lb:s:%s" % sid, "lbls", ",".join(sorted(new_lbls)))
         pipe.lpush("lb:s:%s:h" % sid, '%d:1' % now)
         pipe.ltrim("lb:s:%s:h" % sid, 0, MAX_SAVED - 1)
         pipe.hset("lb:s:%s" % sid, "lval", '1')
@@ -70,11 +83,11 @@ def eval_conds(conds, lval, lts, now):
     return warnings, errors
 
 
-def get_services(label):
+def get_services(lbl):
     now = int(time.time())
     fields = ("#", "lb:s:*->lval", "lb:s:*->lts", "lb:s:*->cond")
     services = []
-    for sid, lval, lts, cond in chunks(g.db.sort("lb:services", get=fields), 4):
+    for sid, lval, lts, cond in chunks(g.db.sort("lb:services:%s" % lbl, get=fields), 4):
         conds = parse_conds(cond or DEFAULT_COND)
         warnings, errors = eval_conds(conds, lval, int(lts), now)
         if len(warnings) == 0 and len(errors) == 0:
@@ -88,9 +101,9 @@ def get_services(label):
     return services
 
 
-@app.route("/s", methods = ["GET"])
-def get_list():
-    services = get_services("")
+@app.route("/dashboard/<lbl>", methods = ["GET"])
+def get_list(lbl):
+    services = get_services(lbl)
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0
     return render_template("dashboardui.html", services=services,
@@ -98,9 +111,14 @@ def get_list():
                            has_errors=has_errors)
 
 
+@app.route("/dashboard/", methods = ["GET"])
+def get_list_all():
+    return get_list('all')
+
+
 @app.route("/raw", methods = ["GET"])
 def get_list_raw():
-    services = get_services("")
+    services = get_services("all")
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0
     return render_template("dashboard.html", services=services,
