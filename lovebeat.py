@@ -1,15 +1,28 @@
 import json
 import logging
+import sys
 import time
 
 from flask import Flask, g, render_template, request, make_response, jsonify
 from flask import redirect, url_for
 import redis
 
+sys.stdout = sys.stderr
 MAX_SAVED = 100
-DEFAULT_CONF = {'wheartbeat': 10, 'eheartbeat': 20}
+DEFAULT_CONF = {'wheartbeat': 10, 'eheartbeat': 20, 'labels': []}
 app = Flask(__name__)
 pool = redis.ConnectionPool(host='localhost', port=6379, db=0)
+
+
+def get_ts():
+    if app.config.get('TESTING'):
+        return app.config['TESTING_TS']
+    return int(time.time())
+
+
+def init_db():
+    r = conn()
+    r.flushdb()
 
 
 def conn():
@@ -32,12 +45,8 @@ def before_request():
 def get_old_conf(sid):
     conf = g.db.hget("lb:s:%s" % sid, "conf")
     if not conf:
-        return DEFAULT_CONF
+        return dict(DEFAULT_CONF)
     return json.loads(conf)
-
-
-def format_maint(req):
-    return req
 
 
 def update_labels(pipe, sid, old_lbls, new_lbls):
@@ -70,14 +79,14 @@ def maint(sid):
         do_maint(sid, type, expiry)
         return jsonify()
     elif request.form:
-        type = request.json.get('type', type)
-        expiry = int(request.json.get('expiry'), expiry)
+        type = request.form.get('type', type)
+        expiry = int(request.form.get('expiry', expiry))
     do_maint(sid, type, expiry)
     return "ok\n"
 
 
 def do_maint(sid, type, expiry):
-    now = int(time.time())
+    now = get_ts()
     conf = get_old_conf(sid)
     conf['maint'] = {'type': type,
                      'expiry': now + expiry}
@@ -136,7 +145,7 @@ def trigger(sid):
 
 
 def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
-    now = int(time.time())
+    now = get_ts()
     conf = get_old_conf(sid)
     new_lbls = set([l.lower() for l in new_lbls])
     old_lbls = set(conf.get('labels', []))
@@ -178,25 +187,25 @@ def sago(i):
 
 
 def eval_service(conf, service, now):
-    if conf.get('wheartbeat') and service['last_heartbeat'] > conf['wheartbeat']:
+    if conf.get('wheartbeat') and service['last_heartbeat'] >= conf['wheartbeat']:
         service['wheartbeat'] = True
         service['status'] = 'warning'
-    if conf.get('eheartbeat') and service['last_heartbeat'] > conf['eheartbeat']:
+    if conf.get('eheartbeat') and service['last_heartbeat'] >= conf['eheartbeat']:
         service['eheartbeat'] = True
         service['status'] = 'error'
-    if 'maint' in conf and conf['maint'] >= now:
+    if 'maint' in conf and conf['maint']['expiry'] >= now:
         service['status'] = 'maint'
 
 
 def get_services(lbl):
-    now = int(time.time())
+    now = get_ts()
     fields = ("#", "lb:s:*->last", "lb:s:*->conf")
     services = []
     for sid, last, conf in \
             chunks(g.db.sort("lb:services:%s" % lbl, get=fields), 3):
         ts, lval = last.split(":")
         ts = int(ts)
-        conf = json.loads(conf) if conf else DEFAULT_CONF
+        conf = json.loads(conf) if conf else dict(DEFAULT_CONF)
         service = {'sid': sid, 'ts': ts, 'status': 'ok',
                    'conf': conf,
                    'last_ts': ts, 'last_val': lval,

@@ -16,7 +16,7 @@ To install the dependencies, it is recommended to use virtualenv:
 
 To start it as a development server, just run:
 
-    $ python app.py
+    $ python lovebeat.py
 
 Usage
 =====
