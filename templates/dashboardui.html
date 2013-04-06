@@ -10,16 +10,25 @@
       <h1>Dashboard for &#171;{{lbl}}&#187;</h1>
       <ol class="services">
 {% for service in services -%}
-        <li class="service">
+        <li class="service" data-sid="{{service.sid}}">
 	  <img class="status" src="/static/{{service.status}}-16.png" width="16" height="16">
 	  <span class="name">
 	    {{service.sid}}
 	  </span>
 	  <div class="meta">
 	    <div class="right">
+	      <div class="buttons">
+		<button type="button" class="btn btn-mini" data-action="trigger">Trigger</button>
+{% if service.status == 'maint' -%}
+		<button type="button" class="btn btn-mini" data-action="unmaint">Unpause</button>
+{% else -%}
+		<button type="button" class="btn btn-mini" data-action="maint">Pause</button>
+{% endif -%}
+		<button type="button" class="btn btn-mini" data-action="delete">Delete</button>
+	      </div>
 	      <div class="heartbeat last">
 		<img src="/static/lhb-12.png" width="12" height="12">
-		<span class="t">{{service.last_heartbeat|pretty_interval_simple}}</span>
+		<span class="t">{{service.last_heartbeat|pretty_interval}}</span>
 	      </div>
 {% if service.conf.wheartbeat -%}
 	      <div class="heartbeat warning">
@@ -48,6 +57,26 @@ $("li").hover(
     $(this).removeClass('hover');
   }
   );
+
+$("button").click(function(e) {
+  var action = $(this).data("action");
+  var service = $(this).closest("li").data("sid");
+  if (action == "delete") {
+    var conf = confirm("Are you sure you want to delete this service?");
+    if (conf != true)
+      return;
+  }
+  $.ajax({
+    type: "POST",
+    url: "/s/" + service + "/" + action,
+    data: JSON.stringify({ }),
+    contentType: "application/json; charset=utf-8",
+    dataType: "json",
+     complete: function() {
+       document.location.reload();
+     }
+   });
+});
     </script>
   </body>
 </html>

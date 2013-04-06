@@ -36,40 +36,6 @@ def get_old_conf(sid):
     return json.loads(conf)
 
 
-def handle_conds(items, conf):
-    if 'heartbeat' in dict(items):
-        if 'eheartbeat' in conf:
-            del conf['eheartbeat']
-        if 'wheartbeat' in conf:
-            del conf['wheartbeat']
-    for key, value in items:
-        if key == 'heartbeat':
-            if ':' in value:
-                type, value = value.split(":")
-            else:
-                type, value = 'error', value
-            if type == 'error':
-                conf['eheartbeat'] = int(value)
-            elif type == 'warning':
-                conf['wheartbeat'] = int(value)
-
-
-def handle_maint(maint, now, conf):
-    if 'maint' in conf and conf['maint']['type'] != 'hard':
-        del conf['maint']
-    if maint:
-        type, expiry = maint.split(':')
-        conf['maint'] = {'type': type,
-                         'expiry': now + int(expiry)}
-
-
-def format_lbls(req):
-    if req:
-        new_lbls = [l.strip() for l in req.split(',')]
-        return set([l for l in new_lbls if l])
-    return set([])
-
-
 def format_maint(req):
     return req
 
@@ -83,17 +49,104 @@ def update_labels(pipe, sid, old_lbls, new_lbls):
         pipe.srem("lb:services:%s" % lbl, sid)
 
 
-@app.route("/s/<sid>", methods = ["GET", "POST"])
-def update(sid):
+@app.route("/s/<sid>/unmaint", methods = ["GET", "POST"])
+def unmaint(sid):
+    conf = get_old_conf(sid)
+    if 'maint' in conf:
+        del conf['maint']
+    g.db.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+    if request.json:
+        return jsonify()
+    return "ok\n"
+
+
+@app.route("/s/<sid>/maint", methods = ["GET", "POST"])
+def maint(sid):
+    type = "soft"
+    expiry = 10 * 60
+    if request.json:
+        type = request.json.get('type', type)
+        expiry = int(request.json.get('expiry'), expiry)
+        do_maint(sid, type, expiry)
+        return jsonify()
+    elif request.form:
+        type = request.json.get('type', type)
+        expiry = int(request.json.get('expiry'), expiry)
+    do_maint(sid, type, expiry)
+    return "ok\n"
+
+
+def do_maint(sid, type, expiry):
     now = int(time.time())
     conf = get_old_conf(sid)
-    new_lbls = format_lbls(request.form.get('labels'))
+    conf['maint'] = {'type': type,
+                     'expiry': now + expiry}
+    g.db.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+
+
+@app.route("/s/<sid>/delete", methods = ["POST"])
+def delete(sid):
+    conf = get_old_conf(sid)
+    lbls = set(conf.get('labels', []))
+    lbls.add('all')
+    with g.db.pipeline() as pipe:
+        for lbl in lbls:
+            pipe.srem("lb:services:%s" % lbl, sid)
+        pipe.delete("lb:s:%s" % sid)
+        pipe.delete("lb:s:%s:h" % sid)
+        pipe.execute()
+    if request.json:
+        return jsonify()
+    return "ok\n"
+
+
+@app.route("/s/<sid>", methods = ["GET", "POST"])
+def trigger_ind(sid):
+    return trigger(sid)
+
+
+@app.route("/s/<sid>/trigger", methods = ["GET", "POST"])
+def trigger(sid):
+    if request.json:
+        whb = request.json.get('heartbeat', {}).get('warning')
+        ehb = request.json.get('heartbeat', {}).get('error')
+        do_trigger(sid, request.json.get('labels', []),
+                   whb, ehb)
+        return jsonify()
+    elif request.form:
+        lbls = set([])
+        if 'labels' in request.form:
+            lbls = [l.strip() for l in request.form['labels'].split(',')]
+            lbls = set([l for l in lbls if l])
+        ehb = whb = None
+        for key, value in request.form.items(multi=True):
+            if key == 'heartbeat':
+                if ':' in value:
+                    type, value = value.split(":")
+                else:
+                    type, value = 'error', value
+                if type == 'error':
+                    ehb = int(value)
+                elif type == 'warning':
+                    whb = int(value)
+        do_trigger(sid, lbls, whb, ehb)
+        return "ok\n"
+    do_trigger(sid, [], None, None)
+    return "ok\n"
+
+
+def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
+    now = int(time.time())
+    conf = get_old_conf(sid)
+    new_lbls = set([l.lower() for l in new_lbls])
     old_lbls = set(conf.get('labels', []))
     if new_lbls:
         conf['labels'] = sorted(new_lbls)
-    handle_conds(request.form.items(multi=True), conf)
-    handle_maint(request.form.get('maint'), now, conf)
-
+    if ehb is not None or whb is not None:
+        conf['eheartbeat'] = ehb
+        conf['wheartbeat'] = whb
+    if conf.get('maint', {}).get('type') == 'soft':
+        del conf['maint']
     with g.db.pipeline() as pipe:
         update_labels(pipe, sid, old_lbls, new_lbls)
         pipe.hset("lb:s:%s" % sid, "last", '%d:1' % now)
@@ -102,12 +155,13 @@ def update(sid):
         if conf:
             pipe.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
         pipe.execute()
-    return "ok"
 
 
-@app.template_filter('pretty_interval_simple')
-def ago(i):
+@app.template_filter('pretty_interval')
+def sago(i):
     s = ""
+    if i == 0:
+        return "now"
     if i >= 86400:
         s += "%dd" % int(i / 3600)
         i = i % 86400
@@ -117,35 +171,21 @@ def ago(i):
     if i >= 60:
         s += "%dm" % int(i / 60)
         i = i % 60
+    # be restrictive when we show 'seconds'
     if s == "" and i > 0:
         s += "%ds" % i
     return s
 
 
-@app.template_filter('pretty_interval')
-def ago(i):
-    s = ""
-    if i >= 86400:
-        s += "%dd" % int(i / 3600)
-        i = i % 86400
-    if i >= 3600:
-        s += "%dh" % int(i / 3600)
-        i = i % 3600
-    if i >= 60:
-        s += "%dm" % int(i / 60)
-        i = i % 60
-    if i > 0:
-        s += "%ds" % i
-    return s
-
-
 def eval_service(conf, service, now):
-    if 'wheartbeat' in conf and service['last_heartbeat'] > conf['wheartbeat']:
+    if conf.get('wheartbeat') and service['last_heartbeat'] > conf['wheartbeat']:
         service['wheartbeat'] = True
         service['status'] = 'warning'
-    if 'eheartbeat' in conf and service['last_heartbeat'] > conf['eheartbeat']:
+    if conf.get('eheartbeat') and service['last_heartbeat'] > conf['eheartbeat']:
         service['eheartbeat'] = True
         service['status'] = 'error'
+    if 'maint' in conf and conf['maint'] >= now:
+        service['status'] = 'maint'
 
 
 def get_services(lbl):
