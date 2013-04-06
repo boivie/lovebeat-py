@@ -2,38 +2,52 @@
   <head>
     <title>Lovebeat dashboard for {{lbl}}</title>
     <link href="/static/lovebeat.css" media="all" rel="stylesheet" type="text/css">
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
   </head>
   <body>
     <a href="https://github.com/boivie/lovebeat"><img style="position: absolute; top: 0; left: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_left_red_aa0000.png" alt="Fork me on GitHub"></a>
     <div class="container">
       <h1>Dashboard for &#171;{{lbl}}&#187;</h1>
-      <table class="table">
-	<thead>
-	  <tr>
-	    <th style="width: 39px;">Status</th>
-	    <th style="width: 250px;">Service</th>
-	    <th style="width: 450px;">Comment</th>
-	  </tr>
-	</thead>
-	<tbody>
+      <ol class="services">
 {% for service in services -%}
-	  <tr>
-	    <td class="status"><img class="status" src="/static/{{service.status}}-16.png" width="16" height="16"></td>
-	    <td><a href="{{url_for('.edit_service', sid=service.sid)}}">{{service.sid}}</a></td>
-	    <td>
-{%- if service.status == "ok" -%}
-Service is running normally.
-{%- elif service.status == "warning" -%}
-{{service.warnings[0]}}
-{%- elif service.status == "error" -%}
-{{service.errors[0]}}
-{%- elif service.status == "maint" -%}
-Service has a scheduled maintenance
-{%- endif -%}</td>
-	  </tr>
+        <li class="service">
+	  <img class="status" src="/static/{{service.status}}-16.png" width="16" height="16">
+	  <span class="name">
+	    {{service.sid}}
+	  </span>
+	  <div class="meta">
+	    <div class="right">
+	      <div class="heartbeat last">
+		<img src="/static/lhb-12.png" width="12" height="12">
+		<span class="t">{{service.last_heartbeat|pretty_interval_simple}}</span>
+	      </div>
+{% if service.conf.wheartbeat -%}
+	      <div class="heartbeat warning">
+		<img src="/static/whb-12.png" width="12" height="12">
+		<span>{{service.conf.wheartbeat|pretty_interval}}</span>
+	      </div>
+{% endif -%}
+{% if service.conf.eheartbeat -%}
+	      <div class="heartbeat error">
+		<img src="/static/ehb-12.png" width="12" height="12">
+		<span>{{service.conf.eheartbeat|pretty_interval}}</span>
+	      </div>
+{% endif -%}
+	    </div>
+	  </div>
+	</li>
 {% endfor -%}
-	</tbody>
-      </table>
+      </ol>
     </div>
+    <script>
+$("li").hover(
+  function () {
+    $(this).addClass('hover');
+  },
+  function () {
+    $(this).removeClass('hover');
+  }
+  );
+    </script>
   </body>
 </html>

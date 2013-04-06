@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -6,7 +7,7 @@ from flask import redirect, url_for
 import redis
 
 MAX_SAVED = 100
-DEFAULT_COND = "e:heartbeat:20;w:heartbeat:10"
+DEFAULT_CONF = {'wheartbeat': 10, 'eheartbeat': 20}
 app = Flask(__name__)
 pool = redis.ConnectionPool(host='localhost', port=6379, db=0)
 
@@ -28,21 +29,38 @@ def before_request():
     g.db = conn()
 
 
-def get_old_data(sid):
-    old_lbls, old_maint = g.db.hmget("lb:s:%s" % sid, "lbls", "maint")
-    old_lbls = old_lbls or ""
-    old_lbls = set([l for l in old_lbls.split(",") if l])
-    return old_lbls, old_maint
+def get_old_conf(sid):
+    conf = g.db.hget("lb:s:%s" % sid, "conf")
+    if not conf:
+        return DEFAULT_CONF
+    return json.loads(conf)
 
 
-def format_cond(items):
-    conds = []
+def handle_conds(items, conf):
+    if 'heartbeat' in dict(items):
+        if 'eheartbeat' in conf:
+            del conf['eheartbeat']
+        if 'wheartbeat' in conf:
+            del conf['wheartbeat']
     for key, value in items:
-        if key == 'error':
-            conds.append('e:%s' % value)
-        elif key == 'warning':
-            conds.append('w:%s' % value)
-    return ';'.join(conds)
+        if key == 'heartbeat':
+            if ':' in value:
+                type, value = value.split(":")
+            else:
+                type, value = 'error', value
+            if type == 'error':
+                conf['eheartbeat'] = int(value)
+            elif type == 'warning':
+                conf['wheartbeat'] = int(value)
+
+
+def handle_maint(maint, now, conf):
+    if 'maint' in conf and conf['maint']['type'] != 'hard':
+        del conf['maint']
+    if maint:
+        type, expiry = maint.split(':')
+        conf['maint'] = {'type': type,
+                         'expiry': now + int(expiry)}
 
 
 def format_lbls(req):
@@ -56,52 +74,55 @@ def format_maint(req):
     return req
 
 
+def update_labels(pipe, sid, old_lbls, new_lbls):
+    pipe.sadd("lb:services:all", sid)
+    for lbl in new_lbls - old_lbls:
+        pipe.sadd("lb:services:%s" % lbl, sid)
+        pipe.sadd("lb:labels", lbl)
+    for lbl in old_lbls - new_lbls:
+        pipe.srem("lb:services:%s" % lbl, sid)
+
+
 @app.route("/s/<sid>", methods = ["GET", "POST"])
 def update(sid):
     now = int(time.time())
-    old_lbls, old_maint = get_old_data(sid)
+    conf = get_old_conf(sid)
     new_lbls = format_lbls(request.form.get('labels'))
-    cond = format_cond(request.form.items(multi=True))
-    new_maint = format_maint(request.form.get('maint'))
+    old_lbls = set(conf.get('labels', []))
+    if new_lbls:
+        conf['labels'] = sorted(new_lbls)
+    handle_conds(request.form.items(multi=True), conf)
+    handle_maint(request.form.get('maint'), now, conf)
 
     with g.db.pipeline() as pipe:
-        pipe.sadd("lb:services:all", sid)
-        # Remove 'soft maintentance' if we get a good status
-        for lbl in new_lbls - old_lbls:
-            pipe.sadd("lb:services:%s" % lbl, sid)
-            pipe.sadd("lb:labels", lbl)
-        for lbl in old_lbls - new_lbls:
-            pipe.srem("lb:services:%s" % lbl, sid)
-        if old_lbls != new_lbls:
-            pipe.hset("lb:s:%s" % sid, "lbls", ",".join(sorted(new_lbls)))
-
-        if new_maint:
-            maint_type, expiry = new_maint.split(":")
-            expiry = int(expiry) + now
-            pipe.hset("lb:s:%s" % sid, "maint", "%s:%d" % (maint_type, expiry))
-        else:
-            if old_maint:
-                maint_type, expiry = old_maint.split(":")
-                if maint_type == 'soft':
-                    pipe.hset("lb:s:%s" % sid, "maint", "")
-            pipe.lpush("lb:s:%s:h" % sid, '%d:1' % now)
-            pipe.ltrim("lb:s:%s:h" % sid, 0, MAX_SAVED - 1)
-            pipe.hset("lb:s:%s" % sid, "lval", '1')
-            pipe.hset("lb:s:%s" % sid, "ts", now)
-            if cond:
-                pipe.hset("lb:s:%s" % sid, "cond", cond)
+        update_labels(pipe, sid, old_lbls, new_lbls)
+        pipe.hset("lb:s:%s" % sid, "last", '%d:1' % now)
+        pipe.lpush("lb:s:%s:h" % sid, '%d:1' % now)
+        pipe.ltrim("lb:s:%s:h" % sid, 0, MAX_SAVED - 1)
+        if conf:
+            pipe.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
         pipe.execute()
     return "ok"
 
 
-def parse_conds(cond):
-    conds = []
-    for c in [c for c in cond.split(";") if c]:
-        t, key, expr = c.split(":")
-        conds.append((t, key, expr))
-    return conds
+@app.template_filter('pretty_interval_simple')
+def ago(i):
+    s = ""
+    if i >= 86400:
+        s += "%dd" % int(i / 3600)
+        i = i % 86400
+    if i >= 3600:
+        s += "%dh" % int(i / 3600)
+        i = i % 3600
+    if i >= 60:
+        s += "%dm" % int(i / 60)
+        i = i % 60
+    if s == "" and i > 0:
+        s += "%ds" % i
+    return s
 
 
+@app.template_filter('pretty_interval')
 def ago(i):
     s = ""
     if i >= 86400:
@@ -118,38 +139,30 @@ def ago(i):
     return s
 
 
-def eval_conds(conds, lval, ts, now):
-    errors = []
-    warnings = []
-    for t, key, expr in conds:
-        l = errors if t == 'e' else warnings
-        if key == 'heartbeat':
-            limit = int(expr)
-            if (now - ts) > limit:
-                m = "Heartbeat last seen %s ago, limit = %s"
-                l.append(m % (ago(now - ts), ago(limit)))
-    return warnings, errors
+def eval_service(conf, service, now):
+    if 'wheartbeat' in conf and service['last_heartbeat'] > conf['wheartbeat']:
+        service['wheartbeat'] = True
+        service['status'] = 'warning'
+    if 'eheartbeat' in conf and service['last_heartbeat'] > conf['eheartbeat']:
+        service['eheartbeat'] = True
+        service['status'] = 'error'
 
 
 def get_services(lbl):
     now = int(time.time())
-    fields = ("#", "lb:s:*->lval", "lb:s:*->ts", "lb:s:*->cond", "lb:s:*->maint")
+    fields = ("#", "lb:s:*->last", "lb:s:*->conf")
     services = []
-    for sid, lval, ts, cond, maint in \
-            chunks(g.db.sort("lb:services:%s" % lbl, get=fields), 5):
-        conds = parse_conds(cond or DEFAULT_COND)
-        warnings, errors = eval_conds(conds, lval, int(ts), now)
-        status = 'ok'
-        if maint:
-            maint_type, maint_expiry = maint.split(":")
-            if int(maint_expiry) >= now:
-                status = 'maint'
-        if status != 'maint' and len(errors) > 0:
-            status = 'error'
-        elif status != 'maint' and len(warnings) > 0:
-            status = 'warning'
-        services.append({'sid': sid, 'ts': ts, 'status': status,
-                         'warnings': warnings, 'errors': errors})
+    for sid, last, conf in \
+            chunks(g.db.sort("lb:services:%s" % lbl, get=fields), 3):
+        ts, lval = last.split(":")
+        ts = int(ts)
+        conf = json.loads(conf) if conf else DEFAULT_CONF
+        service = {'sid': sid, 'ts': ts, 'status': 'ok',
+                   'conf': conf,
+                   'last_ts': ts, 'last_val': lval,
+                   'last_heartbeat': now - ts}
+        eval_service(conf, service, now)
+        services.append(service)
     services.sort(lambda a, b: cmp(a['sid'], b['sid']))
     return services
 

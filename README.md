@@ -34,9 +34,19 @@ Then visit <http://localhost:18000/dashboard/all/> to see it.
 Specifying timeouts
 -------------------
 
-    curl http://localhost:18000/s/HEARTBEAT_ID -d error=heartbeat:30 -d warning=heartbeat:6
+    curl http://localhost:18000/s/HEARTBEAT_ID -d heartbeat=30
 
-The values are in seconds. The defaults are to issue warnings after 10 seconds and errors after 20 seconds. The settings will be remembered, so you only need to specify them once, but it will not do harm if you specify them all the time.
+Sets a timeout to trigger errors if no heartbeat has been seen for 30 seconds.
+
+    curl http://localhost:18000/s/HEARTBEAT_ID -d heartbeat=warning:6
+
+Sets a timeout to trigger warnings if no heartbeat has been seen for 6 seconds.
+
+    curl http://localhost:18000/s/HEARTBEAT_ID -d heartbeat=warning:60 -d heartbeat=error:600
+
+Sets a timeout to trigger warnings after one minute and errors after 10 minutes.
+
+The defaults are to issue warnings after 10 seconds and errors after 20 seconds. The settings will be remembered, so you only need to specify them once, but it will not do harm if you specify them all the time.
 
 Specifying labels
 -----------------

@@ -16,42 +16,60 @@ h1 {
     letter-spacing: 1px;
 }
 
-.table th {
-background-color: White;
-font-weight: normal;
-font-size: 11px;
-text-transform: uppercase;
-color: #7F7F7F;
-padding: 9px 0px 9px 0px;
-border-top: 0;
-border-bottom: 3px solid #535353;
-border-left: 0;
-border-right: 0;
-}
-table {
-    border-collapse: separate;
-    border-spacing: 2px;
-    border-color: gray;
-    font-size: 12px;
+.service {
+    position: relative;
+    padding: 2px 2px 2px 52px;
 }
 
-.table td {
-    padding: 4px 10px 4px 10px;
+.services {
+    list-style-type: none;
 }
 
-.table tr:nth-child(even) {
-    background-color: #f1f1f1;
+.service.hover {
+    background-color: #fcfce2 !important;
 }
 
-.table {
-border: 0;
-border-bottom: 1px solid #535353;
-border-collapse: collapse;
-margin: 0px 0px 5px 0px;
-border-spacing: 2px;
-border-color: gray;
+.services li:nth-child(even) {
+    background: #f7fbfc;
 }
 
 .status {
-text-align: center !important;
+    margin-left: -44px;
+}
+
+.name {
+    margin: 2px 0 2px 12px;
+}
+
+.heartbeat {
+    position: absolute;
+    text-align: center;
+    width: 60px;
+}
+
+.heartbeat.last {
+    clear: both;
+}
+
+.heartbeat.last {
+    right: 124px;
+}
+
+.heartbeat.warning {
+    right: 64px;
+}
+
+.heartbeat.error {
+    right: 4px;
+}
+
+.meta {
+    font-size: 11px;
+}
+
+.right {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    white-space: nowrap;
 }
