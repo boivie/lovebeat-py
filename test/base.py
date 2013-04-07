@@ -2,11 +2,16 @@ import lovebeat
 import unittest
 
 
-class LovebeatBase(unittest.TestCase):
+class LovebeatCoreBase(unittest.TestCase):
     def setUp(self):
         lovebeat.app.config['TESTING'] = True
-        self.set_ts(0)
         self.app = lovebeat.app.test_client()
+
+
+class LovebeatBase(LovebeatCoreBase):
+    def setUp(self):
+        super(LovebeatBase, self).setUp()
+        self.set_ts(0)
         lovebeat.use_test_db()
 
     def dbtrace(self, tracer):
@@ -25,6 +30,3 @@ class LovebeatBase(unittest.TestCase):
         if not s in rv.data:
             print(rv.data)
             assert(False)
-
-    def tearDown(self):
-        pass

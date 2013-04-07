@@ -169,23 +169,25 @@ def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
 
 
 @app.template_filter('pretty_interval')
-def sago(i):
-    s = ""
+def pinterval(i):
     if i == 0:
         return "now"
-    if i >= 86400:
-        s += "%dd" % int(i / 3600)
+    s = []
+    num_days = int(i / 86400)
+    if num_days > 0:
+        s.append("%dd" % num_days)
         i = i % 86400
-    if i >= 3600:
-        s += "%dh" % int(i / 3600)
+    if num_days < 10 and i >= 3600:
+        s.append("%dh" % int(i / 3600))
         i = i % 3600
-    if i >= 60:
-        s += "%dm" % int(i / 60)
+    if num_days == 0 and i >= 60:
+        s.append("%dm" % int(i / 60))
         i = i % 60
-    # be restrictive when we show 'seconds'
-    if s == "" and i > 0:
-        s += "%ds" % i
-    return s
+
+    # round the number to "two entries" and skip seconds whereever possible
+    if len(s) == 0 and i > 0:
+        s.append("%ds" % i)
+    return "".join(s[0:2])
 
 
 def eval_service(conf, service, now):
