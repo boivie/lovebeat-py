@@ -206,7 +206,8 @@ def get_services(lbl):
     fields = ("#", "lb:s:*->last", "lb:s:*->conf")
     services = []
     for sid, last, conf in \
-            chunks(g.db.sort("lb:services:%s" % lbl, get=fields), 3):
+            chunks(g.db.sort("lb:services:%s" % lbl, by="nosort",
+                             get=fields), 3):
         ts, lval = last.split(":")
         ts = int(ts)
         conf = json.loads(conf) if conf else dict(DEFAULT_CONF)
