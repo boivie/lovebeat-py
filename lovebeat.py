@@ -20,9 +20,9 @@ def get_ts():
     return int(time.time())
 
 
-def use_test_db():
+def use_test_db(port):
     global pool
-    pool = redis.ConnectionPool(host='localhost', port=16379, db=0)
+    pool = redis.ConnectionPool(host='localhost', port=port, db=0)
     r = conn()
     r.flushdb()
 

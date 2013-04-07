@@ -1,5 +1,7 @@
-import lovebeat
+import os
 import unittest
+
+import lovebeat
 
 
 class LovebeatCoreBase(unittest.TestCase):
@@ -12,7 +14,10 @@ class LovebeatBase(LovebeatCoreBase):
     def setUp(self):
         super(LovebeatBase, self).setUp()
         self.set_ts(0)
-        lovebeat.use_test_db()
+        if os.environ.get('TRAVIS') == 'true':
+            lovebeat.use_test_db(6379)
+        else:
+            lovebeat.use_test_db(16379)
 
     def dbtrace(self, tracer):
         r = lovebeat.conn()
