@@ -7,7 +7,7 @@ class LovebeatBase(unittest.TestCase):
         lovebeat.app.config['TESTING'] = True
         self.set_ts(0)
         self.app = lovebeat.app.test_client()
-        lovebeat.init_db()
+        lovebeat.use_test_db()
 
     def dbtrace(self, tracer):
         r = lovebeat.conn()

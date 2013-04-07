@@ -72,6 +72,22 @@ It is very simple to have external monitoring systems such as [Pingdom](http://w
 - http://localhost:18000/dashboard/all/raw
 - http://localhost:18000/dashboard/all/json
 
+Tests
+=====
+
+Lovebeat comes with a battery of test cases. To run them, first start a separate redis instance (to protect your production data) by running:
+
+    $ redis-server test/redis-test.conf
+
+This will start a redis instance in the background listening to port 16379 (redis runs on port 6379 as default). After this, just run:
+
+    $ nosetests
+    .................
+    ----------------------------------------------------------------------
+    Ran 17 tests in 0.209s
+
+    OK
+
 Copyright and License
 =====================
 
