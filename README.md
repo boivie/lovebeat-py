@@ -23,7 +23,7 @@ Usage
 Reporting heartbeats
 --------------------
 
-To report a heartbeat, simply call curl http://localhost:18000/s/HEARTBEAT_ID, where HEARTBEAT_ID is a name of your choice. If it doesn't exist, it will be created.
+To report a heartbeat, simply call `curl http://localhost:18000/s/HEARTBEAT_ID`, where HEARTBEAT_ID is a name of your choice. If it doesn't exist, it will be created.
 
 Example:
 
@@ -69,8 +69,8 @@ Connecting to external services
 
 It is very simple to have external monitoring systems such as [Pingdom](http://www.pingdom.com), [Zabbix](http://www.zabbix.com/) or similar poll the dashboard to see the status of the services. However, HTML is not the best representation in those cases. So look at these endpoints instead:
 
-- http://localhost:18000/dashboard/all/raw
-- http://localhost:18000/dashboard/all/json
+- <http://localhost:18000/dashboard/all/raw>
+- <http://localhost:18000/dashboard/all/json>
 
 Tests
 =====
