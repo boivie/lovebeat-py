@@ -178,6 +178,7 @@ def pinterval(i):
         return "now"
     s = []
     num_days = int(i / 86400)
+    num_minutes = int(i / 60)
     if num_days > 0:
         s.append("%dd" % num_days)
         i = i % 86400
@@ -189,7 +190,7 @@ def pinterval(i):
         i = i % 60
 
     # round the number to "two entries" and skip seconds whereever possible
-    if len(s) == 0 and i > 0:
+    if num_minutes < 5 and i > 0:
         s.append("%ds" % i)
     return "".join(s[0:2])
 

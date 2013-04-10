@@ -18,11 +18,15 @@ class SimpleTests(LovebeatCoreBase):
         self.assertEquals(lovebeat.pinterval(365 * DAYS), "365d")
 
     def test_interval_smart_rounding(self):
-        # Show seconds up to one minute. Then skip those.
+        # Show seconds up to 5 minutes. Then skip those.
         self.assertEquals(lovebeat.pinterval(1), "1s")
         self.assertEquals(lovebeat.pinterval(59), "59s")
-        self.assertEquals(lovebeat.pinterval(60 + 1), "1m")
-        self.assertEquals(lovebeat.pinterval(60 + 59), "1m")
+        self.assertEquals(lovebeat.pinterval(60 + 1), "1m1s")
+        self.assertEquals(lovebeat.pinterval(60 + 59), "1m59s")
+        self.assertEquals(lovebeat.pinterval(4 * 60 + 59), "4m59s")
+        self.assertEquals(lovebeat.pinterval(5 * 60), "5m")
+        self.assertEquals(lovebeat.pinterval(5 * 60 + 1), "5m")
+        self.assertEquals(lovebeat.pinterval(5 * 60 + 59), "5m")
 
         # Show minutes unless we show days
         self.assertEquals(lovebeat.pinterval(60 * 60 + 1 * 60), "1h1m")
