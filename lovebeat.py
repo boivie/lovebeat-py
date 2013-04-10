@@ -53,6 +53,10 @@ def get_old_conf(sid):
 
 def update_labels(pipe, sid, old_lbls, new_lbls):
     pipe.sadd("lb:services:all", sid)
+    # only modify labels if we are setting new ones. They shall be
+    # persistent otherwise.
+    if len(new_lbls) == 0:
+        return
     for lbl in new_lbls - old_lbls:
         pipe.sadd("lb:services:%s" % lbl, sid)
         pipe.sadd("lb:labels", lbl)
