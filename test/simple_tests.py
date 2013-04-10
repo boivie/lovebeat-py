@@ -1,3 +1,4 @@
+import json
 import unittest
 from base import LovebeatBase
 from werkzeug.datastructures import MultiDict
@@ -86,6 +87,20 @@ class SimpleTests(LovebeatBase):
         self.set_ts(30)
         self.app.post('/s/test.one', data=md)
         self.expect('test.one', 'OK', 40)
+
+    def test_error_smaller_than_warning(self):
+        md = MultiDict([('heartbeat', 'warning:20'),
+                        ('heartbeat', 'error:10')])
+        self.app.post('/s/test.one', data=md)
+        obj = json.loads(self.app.get('/dashboard/all/json').data)
+        self.assertEquals(10, obj['services'][0]['conf']['eheartbeat'])
+        assert obj['services'][0]['conf'].get('wheartbeat', None) is None
+        self.expect('test.one', 'OK', 0)
+        self.expect('test.one', 'OK', 9)
+        self.expect('test.one', 'ERROR', 10)
+        self.expect('test.one', 'ERROR', 19)
+        self.expect('test.one', 'ERROR', 20)
+        self.expect('test.one', 'ERROR', 10000)
 
 if __name__ == '__main__':
     unittest.main()

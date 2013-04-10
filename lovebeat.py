@@ -158,6 +158,8 @@ def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
     if new_lbls:
         conf['labels'] = sorted(new_lbls)
     if ehb is not None or whb is not None:
+        if whb is not None and ehb is not None and whb > ehb:
+            whb = None
         conf['eheartbeat'] = ehb
         conf['wheartbeat'] = whb
     if conf.get('maint', {}).get('type') == 'soft':
