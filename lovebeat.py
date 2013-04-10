@@ -262,6 +262,11 @@ def get_list_json(lbl):
     return jsonify(services=services)
 
 
+@app.route("/", methods = ["GET"])
+def index():
+    return redirect(url_for('.get_list', lbl='all'))
+
+
 if app.debug:
     logging.basicConfig(level=logging.DEBUG)
 

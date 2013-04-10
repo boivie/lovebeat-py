@@ -4,6 +4,11 @@ from werkzeug.datastructures import MultiDict
 
 
 class SimpleTests(LovebeatBase):
+    def test_index(self):
+        rv = self.app.get('/', follow_redirects=True)
+        assert '200' in rv.status
+        assert '<html>' in rv.data
+
     def test_empty_db(self):
         rv = self.app.get('/dashboard/all/raw')
         assert 'all good' in rv.data
