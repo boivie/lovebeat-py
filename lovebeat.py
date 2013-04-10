@@ -240,8 +240,11 @@ def get_list(lbl):
 
 
 @app.route("/dashboard/", methods = ["GET"])
-def get_list_all():
-    return redirect(url_for('.get_list', lbl='all'))
+def list_labels():
+    labels = list(g.db.smembers('lb:labels'))
+    labels.sort(lambda a, b: cmp(a.upper(), b.upper()))
+    return render_template("list_labels.html",
+                           labels=labels)
 
 
 @app.route("/dashboard/<lbl>/raw", methods = ["GET"])

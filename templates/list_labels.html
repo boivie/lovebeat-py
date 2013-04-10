@@ -1,0 +1,19 @@
+<html>
+  <head>
+    <title>Lovebeat dashboard for {{lbl}}</title>
+    <link href="/static/lovebeat.css" media="all" rel="stylesheet" type="text/css">
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  </head>
+  <body>
+    <a href="https://github.com/boivie/lovebeat"><img style="position: absolute; top: 0; left: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_left_red_aa0000.png" alt="Fork me on GitHub"></a>
+    <div class="container">
+      <h1>All Labels</h1>
+      <ul class="labels">
+        <li><a href="{{url_for('.get_list', lbl='all')}}">All services</a></li>
+{% for label in labels -%}
+        <li><a href="{{url_for('.get_list', lbl=label)}}">{{label}}</a></li>
+{% endfor -%}
+      </ul>
+    </div>
+  </body>
+</html>

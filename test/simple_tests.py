@@ -10,6 +10,14 @@ class SimpleTests(LovebeatBase):
         assert '200' in rv.status
         assert '<html>' in rv.data
 
+    def test_ui_list_labels(self):
+        self.app.post('/s/test.one', data=dict(labels='one,two'))
+        self.app.post('/s/test.two', data=dict(labels='two,three'))
+        rv = self.app.get('/dashboard/')
+        assert 'one' in rv.data
+        assert 'two' in rv.data
+        assert 'three' in rv.data
+
     def test_empty_db(self):
         rv = self.app.get('/dashboard/all/raw')
         assert 'all good' in rv.data
