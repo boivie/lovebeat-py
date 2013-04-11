@@ -55,7 +55,7 @@ def load_service_config(pipe, sid):
 def load_service_state(pipe, sid):
     state = pipe.hget("lb:s:%s" % sid, "state")
     if not state:
-        return {'last': {}}
+        return {'last': {}, 'status': 'ok', 'seq_id': 0}
     return json.loads(state)
 
 
@@ -78,6 +78,7 @@ def unmaint(sid):
         state = load_service_state(pipe, sid)
         if 'maint' in state:
             del state['maint']
+        # don't calculate 'status' here, let that be done in 'eval'
         pipe.multi()
         pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
 
@@ -110,6 +111,7 @@ def do_maint(sid, type, expiry):
         state = load_service_state(pipe, sid)
         state['maint'] = {'type': type,
                           'expiry': now + expiry}
+        state['status'] = 'maint'
         pipe.multi()
         pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
 
@@ -190,6 +192,7 @@ def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
             del state['maint']
         pipe.multi()
         update_labels(pipe, sid, old_lbls, new_lbls)
+        state['status'] = 'ok'
         state['last']['ts'] = now
         state['last']['val'] = 1
         pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
@@ -224,21 +227,41 @@ def pinterval(i):
     return "".join(s[0:2])
 
 
-def eval_service(service, now):
-    conf = service['config']
-    state = service['state']
+def eval_status(conf, state, now):
     last_heartbeat = now - state['last'].get('ts', 0)
-    service['state']['last']['delta'] = last_heartbeat
     hb_warn = conf['heartbeat']['warning']
     hb_err = conf['heartbeat']['error']
 
-    service['status'] = 'ok'
+    new_status = 'ok'
     if hb_warn and last_heartbeat >= hb_warn:
-        service['status'] = 'warning'
+        new_status = 'warning'
     if hb_err and last_heartbeat >= hb_err:
-        service['status'] = 'error'
-    if 'maint' in state and state['maint']['expiry'] >= now:
-        service['status'] = 'maint'
+        new_status = 'error'
+    if 'maint' in state and \
+            state['maint']['expiry'] >= now:
+        new_status = 'maint'
+    return new_status
+
+
+def eval_service(service, now):
+    old_status = service['state']['status']
+    new_status = eval_status(service['config'], service['state'], now)
+    if new_status != old_status:
+        def trans(pipe):
+            state = load_service_state(pipe, service['id'])
+            old_status = state['status']
+            new_status = eval_status(service['config'], state, now)
+            pipe.multi()
+            if new_status != old_status:
+                if old_status == 'ok':
+                    state['seq_id'] += 1
+                state['status'] = new_status
+                pipe.hset('lb:s:%s' % service['id'], 'state', json.dumps(state))
+            service['state'] = state
+        g.db.transaction(trans, 'lb:s:%s' % service['id'])
+
+    last_heartbeat = now - service['state']['last'].get('ts', 0)
+    service['state']['last']['delta'] = last_heartbeat
 
 
 def get_services(lbl):
@@ -262,8 +285,8 @@ def get_list(lbl):
     for service in services:
         eval_service(service, now)
 
-    has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
-    has_errors = len([s for s in services if s['status'] == 'error']) > 0
+    has_warnings = len([s for s in services if s['state']['status'] == 'warning']) > 0
+    has_errors = len([s for s in services if s['state']['status'] == 'error']) > 0
     return render_template("dashboardui.html", services=services,
                            has_warnings=has_warnings,
                            has_errors=has_errors,
@@ -285,9 +308,9 @@ def get_list_raw(lbl):
     for service in services:
         eval_service(service, now)
 
-    has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
-    has_errors = len([s for s in services if s['status'] == 'error']) > 0
-    has_maint = len([s for s in services if s['status'] == 'maint']) > 0
+    has_warnings = len([s for s in services if s['state']['status'] == 'warning']) > 0
+    has_errors = len([s for s in services if s['state']['status'] == 'error']) > 0
+    has_maint = len([s for s in services if s['state']['status'] == 'maint']) > 0
     html = render_template("dashboard.html", services=services,
                            has_warnings=has_warnings,
                            has_errors=has_errors,
@@ -304,9 +327,9 @@ def show_short(lbl):
     for service in services:
         eval_service(service, now)
 
-    has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
-    has_errors = len([s for s in services if s['status'] == 'error']) > 0
-    has_maint = len([s for s in services if s['status'] == 'maint']) > 0
+    has_warnings = len([s for s in services if s['state']['status'] == 'warning']) > 0
+    has_errors = len([s for s in services if s['state']['status'] == 'error']) > 0
+    has_maint = len([s for s in services if s['state']['status'] == 'maint']) > 0
 
     if has_errors:
         s = "down+error"

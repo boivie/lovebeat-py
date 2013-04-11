@@ -12,7 +12,7 @@
       <ol class="services">
 {% for service in services -%}
         <li class="service" data-sid="{{service.id}}">
-	  <img class="status" src="/static/{{service.status}}-16.png" width="16" height="16">
+	  <img class="status" src="/static/{{service.state.status}}-16.png" width="16" height="16">
 	  <span class="name">
 	    {{service.id}}
 	  </span>
@@ -20,7 +20,7 @@
 	    <div class="right">
 	      <div class="buttons">
 		<button type="button" class="btn btn-mini" data-action="trigger">Trigger</button>
-{% if service.status == 'maint' -%}
+{% if service.state.status == 'maint' -%}
 		<button type="button" class="btn btn-mini" data-action="unmaint">Unpause</button>
 {% else -%}
 		<button type="button" class="btn btn-mini" data-action="maint">Pause</button>
