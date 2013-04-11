@@ -287,6 +287,31 @@ def get_list_raw(lbl):
     return resp
 
 
+@app.route("/dashboard/<lbl>/status", methods = ["GET"])
+def show_short(lbl):
+    now = get_ts()
+    services = get_services(lbl)
+    for service in services:
+        eval_service(service, now)
+
+    has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
+    has_errors = len([s for s in services if s['status'] == 'error']) > 0
+    has_maint = len([s for s in services if s['status'] == 'maint']) > 0
+
+    if has_errors:
+        s = "down+error"
+    elif has_warnings:
+        s = "down+warning"
+    elif has_maint:
+        s = "up"
+    else:
+        s = "up+flawless"
+
+    resp = make_response(s)
+    resp.headers["Content-type"] = "text/plain"
+    return resp
+
+
 @app.route("/dashboard/<lbl>/json", methods = ["GET"])
 def get_list_json(lbl):
     now = get_ts()
