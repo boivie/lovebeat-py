@@ -216,6 +216,7 @@ def pinterval(i):
 
 def eval_service(service, now):
     last_heartbeat = now - service.get('last', {}).get('ts', 0)
+    service['last']['delta'] = last_heartbeat
     conf = service['config']
     hb_warn = conf['heartbeat']['warning']
     hb_err = conf['heartbeat']['error']
@@ -250,7 +251,6 @@ def get_list(lbl):
     services = get_services(lbl)
     for service in services:
         eval_service(service, now)
-        service['last_heartbeat'] = now - service.get('last', {}).get('ts', 0)
 
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0

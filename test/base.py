@@ -38,8 +38,12 @@ class LovebeatBase(LovebeatCoreBase):
             assert(False)
 
     def get_config(self, service):
+        j = self.get_json(service)
+        return j['config']
+
+    def get_json(self, service):
         obj = json.loads(self.app.get('/dashboard/all/json').data)
         for s in obj['services']:
             if s['id'] == service:
-                return s['config']
+                return s
         assert False

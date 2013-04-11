@@ -129,6 +129,22 @@ class SimpleTests(LovebeatBase):
         self.assertEquals(whb, config['heartbeat']['warning'])
         self.assertEquals(ehb, config['heartbeat']['error'])
 
+    def test_delta_heartbeat(self):
+        self.set_ts(15)
+        self.app.post('/s/test.one')
+
+        self.set_ts(20)
+        obj = self.get_json('test.one')
+        self.assertEquals(5, obj['last']['delta'])
+
+        self.set_ts(25)
+        obj = self.get_json('test.one')
+        self.assertEquals(10, obj['last']['delta'])
+
+        self.set_ts(1025)
+        obj = self.get_json('test.one')
+        self.assertEquals(1010, obj['last']['delta'])
+
 
 if __name__ == '__main__':
     unittest.main()
