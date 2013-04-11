@@ -37,6 +37,16 @@ class AlertTests(LovebeatBase):
         expect_alert('test.one', 'warning', 2)
         expect_alert('test.two', 'error', 1)
 
+        self.set_ts(100)
+        self.app.post('/s/test.one', data=md1)
+        expect_alert('test.one', 'ok', 2)
+
+        self.app.post('/s/test.one/maint', data=dict(type='soft', expiry=50))
+        expect_alert('test.one', 'maint', 2)
+
+        self.set_ts(151)
+        expect_alert('test.one', 'error', 3)
+
 
 if __name__ == '__main__':
     unittest.main()

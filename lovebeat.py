@@ -253,7 +253,7 @@ def eval_service(service, now):
             new_status = eval_status(service['config'], state, now)
             pipe.multi()
             if new_status != old_status:
-                if old_status == 'ok':
+                if old_status in ('ok', 'maint'):
                     state['seq_id'] += 1
                 state['status'] = new_status
                 pipe.hset('lb:s:%s' % service['id'], 'state', json.dumps(state))
