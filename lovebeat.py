@@ -207,10 +207,8 @@ def eval_service(service, now):
 
     service['status'] = 'ok'
     if hb_warn and last_heartbeat >= hb_warn:
-        service['wheartbeat'] = True
         service['status'] = 'warning'
     if hb_err and last_heartbeat >= hb_err:
-        service['eheartbeat'] = True
         service['status'] = 'error'
     if 'maint' in conf and conf['maint']['expiry'] >= now:
         service['status'] = 'maint'
