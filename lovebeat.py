@@ -197,11 +197,15 @@ def pinterval(i):
     return "".join(s[0:2])
 
 
-def eval_service(conf, service, now):
-    if conf.get('wheartbeat') and service['last_heartbeat'] >= conf['wheartbeat']:
+def eval_service(service, now):
+    last_heartbeat = now - service.get('last', {}).get('ts', 0)
+    conf = service['conf']
+
+    service['status'] = 'ok'
+    if conf.get('wheartbeat') and last_heartbeat >= conf['wheartbeat']:
         service['wheartbeat'] = True
         service['status'] = 'warning'
-    if conf.get('eheartbeat') and service['last_heartbeat'] >= conf['eheartbeat']:
+    if conf.get('eheartbeat') and last_heartbeat >= conf['eheartbeat']:
         service['eheartbeat'] = True
         service['status'] = 'error'
     if 'maint' in conf and conf['maint']['expiry'] >= now:
@@ -209,7 +213,6 @@ def eval_service(conf, service, now):
 
 
 def get_services(lbl):
-    now = get_ts()
     fields = ("#", "lb:s:*->last", "lb:s:*->conf")
     services = []
     for sid, last, conf in \
@@ -218,11 +221,9 @@ def get_services(lbl):
         ts, lval = last.split(":")
         ts = int(ts)
         conf = json.loads(conf) if conf else dict(DEFAULT_CONF)
-        service = {'sid': sid, 'ts': ts, 'status': 'ok',
+        service = {'sid': sid,
                    'conf': conf,
-                   'last_ts': ts, 'last_val': lval,
-                   'last_heartbeat': now - ts}
-        eval_service(conf, service, now)
+                   'last': {'ts': ts, 'val': lval}}
         services.append(service)
     services.sort(lambda a, b: cmp(a['sid'], b['sid']))
     return services
@@ -230,7 +231,12 @@ def get_services(lbl):
 
 @app.route("/dashboard/<lbl>/", methods = ["GET"])
 def get_list(lbl):
+    now = get_ts()
     services = get_services(lbl)
+    for service in services:
+        eval_service(service, now)
+        service['last_heartbeat'] = now - service.get('last', {}).get('ts', 0)
+
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0
     return render_template("dashboardui.html", services=services,
@@ -249,7 +255,11 @@ def list_labels():
 
 @app.route("/dashboard/<lbl>/raw", methods = ["GET"])
 def get_list_raw(lbl):
+    now = get_ts()
     services = get_services(lbl)
+    for service in services:
+        eval_service(service, now)
+
     has_warnings = len([s for s in services if s['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['status'] == 'error']) > 0
     has_maint = len([s for s in services if s['status'] == 'maint']) > 0
@@ -264,7 +274,10 @@ def get_list_raw(lbl):
 
 @app.route("/dashboard/<lbl>/json", methods = ["GET"])
 def get_list_json(lbl):
+    now = get_ts()
     services = get_services(lbl)
+    for service in services:
+        eval_service(service, now)
     return jsonify(services=services)
 
 
