@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import sys
@@ -9,7 +10,7 @@ import redis
 
 sys.stdout = sys.stderr
 MAX_SAVED = 100
-DEFAULT_CONF = {'wheartbeat': 10, 'eheartbeat': 20, 'labels': []}
+DEFAULT_CONF = {'heartbeat': {'warning': 10, 'error': 20}, 'labels': []}
 app = Flask(__name__)
 pool = redis.ConnectionPool(host='localhost', port=6379, db=0)
 
@@ -47,7 +48,7 @@ def before_request():
 def get_old_conf(sid):
     conf = g.db.hget("lb:s:%s" % sid, "conf")
     if not conf:
-        return dict(DEFAULT_CONF)
+        return copy.deepcopy(DEFAULT_CONF)
     return json.loads(conf)
 
 
@@ -160,8 +161,8 @@ def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
     if ehb is not None or whb is not None:
         if whb is not None and ehb is not None and whb > ehb:
             whb = None
-        conf['eheartbeat'] = ehb
-        conf['wheartbeat'] = whb
+        conf['heartbeat']['error'] = ehb
+        conf['heartbeat']['warning'] = whb
     if conf.get('maint', {}).get('type') == 'soft':
         del conf['maint']
     with g.db.pipeline() as pipe:
@@ -200,12 +201,14 @@ def pinterval(i):
 def eval_service(service, now):
     last_heartbeat = now - service.get('last', {}).get('ts', 0)
     conf = service['config']
+    hb_warn = conf['heartbeat']['warning']
+    hb_err = conf['heartbeat']['error']
 
     service['status'] = 'ok'
-    if conf.get('wheartbeat') and last_heartbeat >= conf['wheartbeat']:
+    if hb_warn and last_heartbeat >= hb_warn:
         service['wheartbeat'] = True
         service['status'] = 'warning'
-    if conf.get('eheartbeat') and last_heartbeat >= conf['eheartbeat']:
+    if hb_err and last_heartbeat >= hb_err:
         service['eheartbeat'] = True
         service['status'] = 'error'
     if 'maint' in conf and conf['maint']['expiry'] >= now:

@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 
@@ -35,3 +36,10 @@ class LovebeatBase(LovebeatCoreBase):
         if not s in rv.data:
             print(rv.data)
             assert(False)
+
+    def get_config(self, service):
+        obj = json.loads(self.app.get('/dashboard/all/json').data)
+        for s in obj['services']:
+            if s['id'] == service:
+                return s['config']
+        assert False

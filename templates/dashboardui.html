@@ -31,16 +31,16 @@
 		<img src="/static/lhb-12.png" width="12" height="12">
 		<span class="t">{{service.last_heartbeat|pretty_interval}}</span>
 	      </div>
-{% if service.config.wheartbeat -%}
+{% if service.config.heartbeat.warning -%}
 	      <div class="heartbeat warning">
 		<img src="/static/whb-12.png" width="12" height="12">
-		<span>{{service.config.wheartbeat|pretty_interval}}</span>
+		<span>{{service.config.heartbeat.warning|pretty_interval}}</span>
 	      </div>
 {% endif -%}
-{% if service.config.eheartbeat -%}
+{% if service.config.heartbeat.error -%}
 	      <div class="heartbeat error">
 		<img src="/static/ehb-12.png" width="12" height="12">
-		<span>{{service.config.eheartbeat|pretty_interval}}</span>
+		<span>{{service.config.heartbeat.error|pretty_interval}}</span>
 	      </div>
 {% endif -%}
 	    </div>

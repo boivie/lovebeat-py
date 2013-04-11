@@ -101,14 +101,34 @@ class SimpleTests(LovebeatBase):
                         ('heartbeat', 'error:10')])
         self.app.post('/s/test.one', data=md)
         obj = json.loads(self.app.get('/dashboard/all/json').data)
-        self.assertEquals(10, obj['services'][0]['config']['eheartbeat'])
-        assert obj['services'][0]['config'].get('wheartbeat', None) is None
+        self.assertEquals(10,
+                          obj['services'][0]['config']['heartbeat']['error'])
+        assert obj['services'][0]['config']['heartbeat']['warning'] is None
         self.expect('test.one', 'OK', 0)
         self.expect('test.one', 'OK', 9)
         self.expect('test.one', 'ERROR', 10)
         self.expect('test.one', 'ERROR', 19)
         self.expect('test.one', 'ERROR', 20)
         self.expect('test.one', 'ERROR', 10000)
+
+    def test_default_conf_is_immutable(self):
+        self.app.post('/s/test.orig')
+        config = self.get_config('test.orig')
+        whb = config['heartbeat']['warning']
+        ehb = config['heartbeat']['error']
+
+        md = MultiDict([('heartbeat', 'warning:%d' % (whb * 2)),
+                        ('heartbeat', 'error:%d' % (ehb * 3))])
+        self.app.post('/s/test.extended', data=md)
+        config = self.get_config('test.extended')
+        self.assertEquals(whb * 2, config['heartbeat']['warning'])
+        self.assertEquals(ehb * 3, config['heartbeat']['error'])
+
+        self.app.post('/s/test.newer')
+        config = self.get_config('test.newer')
+        self.assertEquals(whb, config['heartbeat']['warning'])
+        self.assertEquals(ehb, config['heartbeat']['error'])
+
 
 if __name__ == '__main__':
     unittest.main()
