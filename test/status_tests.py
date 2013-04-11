@@ -16,7 +16,7 @@ class StatusTests(LovebeatBase):
 
         #              error,  warn, maint, "expected"
         self.setExpect(False, False, False, "up+flawless")
-        self.setExpect(False, False,  True, "up")
+        self.setExpect(False, False,  True, "up+maint")
         self.setExpect(False, True,  False, "down+warning")
         self.setExpect(False, True,   True, "down+warning")
         self.setExpect(True,  False, False, "down+error")

@@ -336,7 +336,7 @@ def show_short(lbl):
     elif has_warnings:
         s = "down+warning"
     elif has_maint:
-        s = "up"
+        s = "up+maint"
     else:
         s = "up+flawless"
 
