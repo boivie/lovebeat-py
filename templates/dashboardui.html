@@ -11,10 +11,10 @@
       <h1>Dashboard for &#171;{{lbl}}&#187;</h1>
       <ol class="services">
 {% for service in services -%}
-        <li class="service" data-sid="{{service.sid}}">
+        <li class="service" data-sid="{{service.id}}">
 	  <img class="status" src="/static/{{service.status}}-16.png" width="16" height="16">
 	  <span class="name">
-	    {{service.sid}}
+	    {{service.id}}
 	  </span>
 	  <div class="meta">
 	    <div class="right">
@@ -31,16 +31,16 @@
 		<img src="/static/lhb-12.png" width="12" height="12">
 		<span class="t">{{service.last_heartbeat|pretty_interval}}</span>
 	      </div>
-{% if service.conf.wheartbeat -%}
+{% if service.config.wheartbeat -%}
 	      <div class="heartbeat warning">
 		<img src="/static/whb-12.png" width="12" height="12">
-		<span>{{service.conf.wheartbeat|pretty_interval}}</span>
+		<span>{{service.config.wheartbeat|pretty_interval}}</span>
 	      </div>
 {% endif -%}
-{% if service.conf.eheartbeat -%}
+{% if service.config.eheartbeat -%}
 	      <div class="heartbeat error">
 		<img src="/static/ehb-12.png" width="12" height="12">
-		<span>{{service.conf.eheartbeat|pretty_interval}}</span>
+		<span>{{service.config.eheartbeat|pretty_interval}}</span>
 	      </div>
 {% endif -%}
 	    </div>

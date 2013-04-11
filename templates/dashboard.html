@@ -1,20 +1,20 @@
 {% for service in services -%}
 {% if service.status == 'paused' -%}
-[PAUSED] {{service.sid}}
+[PAUSED] {{service.id}}
 {% elif service.status == 'ok' -%}
-[OK] {{service.sid}}
+[OK] {{service.id}}
 {% elif service.status == 'warning' -%}
-[WARN] {{service.sid}}
+[WARN] {{service.id}}
 {% for msg in service.warnings -%}
 - {{msg}}
 {% endfor -%}
 {% elif service.status == 'error' -%}
-[ERROR] {{service.sid}}
+[ERROR] {{service.id}}
 {% for msg in service.errors -%}
 - {{msg}}
 {% endfor -%}
 {% elif service.status == 'maint' -%}
-[MAINT] {{service.sid}}
+[MAINT] {{service.id}}
 {% else -%}
   [INTERNAL ERROR]
 {% endif -%}

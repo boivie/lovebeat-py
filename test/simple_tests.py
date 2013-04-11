@@ -101,8 +101,8 @@ class SimpleTests(LovebeatBase):
                         ('heartbeat', 'error:10')])
         self.app.post('/s/test.one', data=md)
         obj = json.loads(self.app.get('/dashboard/all/json').data)
-        self.assertEquals(10, obj['services'][0]['conf']['eheartbeat'])
-        assert obj['services'][0]['conf'].get('wheartbeat', None) is None
+        self.assertEquals(10, obj['services'][0]['config']['eheartbeat'])
+        assert obj['services'][0]['config'].get('wheartbeat', None) is None
         self.expect('test.one', 'OK', 0)
         self.expect('test.one', 'OK', 9)
         self.expect('test.one', 'ERROR', 10)

@@ -199,7 +199,7 @@ def pinterval(i):
 
 def eval_service(service, now):
     last_heartbeat = now - service.get('last', {}).get('ts', 0)
-    conf = service['conf']
+    conf = service['config']
 
     service['status'] = 'ok'
     if conf.get('wheartbeat') and last_heartbeat >= conf['wheartbeat']:
@@ -219,13 +219,11 @@ def get_services(lbl):
             chunks(g.db.sort("lb:services:%s" % lbl, by="nosort",
                              get=fields), 3):
         ts, lval = last.split(":")
-        ts = int(ts)
-        conf = json.loads(conf) if conf else dict(DEFAULT_CONF)
-        service = {'sid': sid,
-                   'conf': conf,
-                   'last': {'ts': ts, 'val': lval}}
+        service = {'id': sid,
+                   'config': json.loads(conf),
+                   'last': {'ts': int(ts), 'val': lval}}
         services.append(service)
-    services.sort(lambda a, b: cmp(a['sid'], b['sid']))
+    services.sort(lambda a, b: cmp(a['id'], b['id']))
     return services
 
 
