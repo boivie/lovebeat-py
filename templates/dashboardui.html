@@ -29,7 +29,7 @@
 	      </div>
 	      <div class="heartbeat last">
 		<img src="/static/lhb-12.png" width="12" height="12">
-		<span class="t">{{service.last.delta|pretty_interval}}</span>
+		<span class="t">{{service.state.last.delta|pretty_interval}}</span>
 	      </div>
 {% if service.config.heartbeat.warning -%}
 	      <div class="heartbeat warning">

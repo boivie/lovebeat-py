@@ -135,15 +135,15 @@ class SimpleTests(LovebeatBase):
 
         self.set_ts(20)
         obj = self.get_json('test.one')
-        self.assertEquals(5, obj['last']['delta'])
+        self.assertEquals(5, obj['state']['last']['delta'])
 
         self.set_ts(25)
         obj = self.get_json('test.one')
-        self.assertEquals(10, obj['last']['delta'])
+        self.assertEquals(10, obj['state']['last']['delta'])
 
         self.set_ts(1025)
         obj = self.get_json('test.one')
-        self.assertEquals(1010, obj['last']['delta'])
+        self.assertEquals(1010, obj['state']['last']['delta'])
 
 
 if __name__ == '__main__':

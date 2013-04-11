@@ -52,6 +52,13 @@ def load_service_config(pipe, sid):
     return True, json.loads(conf)
 
 
+def load_service_state(pipe, sid):
+    state = pipe.hget("lb:s:%s" % sid, "state")
+    if not state:
+        return {'last': {}}
+    return json.loads(state)
+
+
 def update_labels(pipe, sid, old_lbls, new_lbls):
     pipe.sadd("lb:services:all", sid)
     # only modify labels if we are setting new ones. They shall be
@@ -68,11 +75,11 @@ def update_labels(pipe, sid, old_lbls, new_lbls):
 @app.route("/s/<sid>/unmaint", methods = ["GET", "POST"])
 def unmaint(sid):
     def trans(pipe):
-        conf_present, conf = load_service_config(pipe, sid)
-        if 'maint' in conf:
-            del conf['maint']
+        state = load_service_state(pipe, sid)
+        if 'maint' in state:
+            del state['maint']
         pipe.multi()
-        pipe.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+        pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
 
     g.db.transaction(trans, 'lb:s:%s' % sid)
     if request.json:
@@ -100,11 +107,11 @@ def do_maint(sid, type, expiry):
     now = get_ts()
 
     def trans(pipe):
-        conf_present, conf = load_service_config(pipe, sid)
-        conf['maint'] = {'type': type,
-                         'expiry': now + expiry}
+        state = load_service_state(pipe, sid)
+        state['maint'] = {'type': type,
+                          'expiry': now + expiry}
         pipe.multi()
-        pipe.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+        pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
 
     g.db.transaction(trans, 'lb:s:%s' % sid)
 
@@ -172,17 +179,20 @@ def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
     def trans(pipe):
         conf_present, old_conf = load_service_config(pipe, sid)
         new_conf = copy.deepcopy(old_conf)
+        state = load_service_state(pipe, sid)
         old_lbls = set(new_conf.get('labels', []))
         if new_lbls:
             new_conf['labels'] = sorted(new_lbls)
         if ehb is not None or whb is not None:
             new_conf['heartbeat']['error'] = ehb
             new_conf['heartbeat']['warning'] = whb
-        if new_conf.get('maint', {}).get('type') == 'soft':
-            del new_conf['maint']
+        if state.get('maint', {}).get('type') == 'soft':
+            del state['maint']
         pipe.multi()
         update_labels(pipe, sid, old_lbls, new_lbls)
-        pipe.hset("lb:s:%s" % sid, "last", '%d:1' % now)
+        state['last']['ts'] = now
+        state['last']['val'] = 1
+        pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
         pipe.lpush("lb:s:%s:h" % sid, '%d:1' % now)
         pipe.ltrim("lb:s:%s:h" % sid, 0, MAX_SAVED - 1)
         if not conf_present or new_conf != old_conf:
@@ -215,9 +225,10 @@ def pinterval(i):
 
 
 def eval_service(service, now):
-    last_heartbeat = now - service.get('last', {}).get('ts', 0)
-    service['last']['delta'] = last_heartbeat
     conf = service['config']
+    state = service['state']
+    last_heartbeat = now - state['last'].get('ts', 0)
+    service['state']['last']['delta'] = last_heartbeat
     hb_warn = conf['heartbeat']['warning']
     hb_err = conf['heartbeat']['error']
 
@@ -226,20 +237,19 @@ def eval_service(service, now):
         service['status'] = 'warning'
     if hb_err and last_heartbeat >= hb_err:
         service['status'] = 'error'
-    if 'maint' in conf and conf['maint']['expiry'] >= now:
+    if 'maint' in state and state['maint']['expiry'] >= now:
         service['status'] = 'maint'
 
 
 def get_services(lbl):
-    fields = ("#", "lb:s:*->last", "lb:s:*->conf")
+    fields = ("#", "lb:s:*->state", "lb:s:*->conf")
     services = []
-    for sid, last, conf in \
+    for sid, state, conf in \
             chunks(g.db.sort("lb:services:%s" % lbl, by="nosort",
                              get=fields), 3):
-        ts, lval = last.split(":")
         service = {'id': sid,
                    'config': json.loads(conf),
-                   'last': {'ts': int(ts), 'val': lval}}
+                   'state': json.loads(state)}
         services.append(service)
     services.sort(lambda a, b: cmp(a['id'], b['id']))
     return services
