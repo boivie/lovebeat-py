@@ -45,8 +45,8 @@ def before_request():
     g.db = conn()
 
 
-def load_service_config(sid):
-    conf = g.db.hget("lb:s:%s" % sid, "conf")
+def load_service_config(pipe, sid):
+    conf = pipe.hget("lb:s:%s" % sid, "conf")
     if not conf:
         return False, copy.deepcopy(DEFAULT_CONF)
     return True, json.loads(conf)
@@ -67,10 +67,14 @@ def update_labels(pipe, sid, old_lbls, new_lbls):
 
 @app.route("/s/<sid>/unmaint", methods = ["GET", "POST"])
 def unmaint(sid):
-    conf_present, conf = load_service_config(sid)
-    if 'maint' in conf:
-        del conf['maint']
-    g.db.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+    def trans(pipe):
+        conf_present, conf = load_service_config(pipe, sid)
+        if 'maint' in conf:
+            del conf['maint']
+        pipe.multi()
+        pipe.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+
+    g.db.transaction(trans, 'lb:s:%s' % sid)
     if request.json:
         return jsonify()
     return "ok\n"
@@ -94,23 +98,31 @@ def maint(sid):
 
 def do_maint(sid, type, expiry):
     now = get_ts()
-    conf_present, conf = load_service_config(sid)
-    conf['maint'] = {'type': type,
-                     'expiry': now + expiry}
-    g.db.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+
+    def trans(pipe):
+        conf_present, conf = load_service_config(pipe, sid)
+        conf['maint'] = {'type': type,
+                         'expiry': now + expiry}
+        pipe.multi()
+        pipe.hset("lb:s:%s" % sid, "conf", json.dumps(conf))
+
+    g.db.transaction(trans, 'lb:s:%s' % sid)
 
 
 @app.route("/s/<sid>/delete", methods = ["POST"])
 def delete(sid):
-    conf_present, conf = load_service_config(sid)
-    lbls = set(conf.get('labels', []))
-    lbls.add('all')
-    with g.db.pipeline() as pipe:
+    def trans(pipe):
+        conf_present, conf = load_service_config(pipe, sid)
+        lbls = set(conf.get('labels', []))
+        lbls.add('all')
+        pipe.multi()
         for lbl in lbls:
             pipe.srem("lb:services:%s" % lbl, sid)
         pipe.delete("lb:s:%s" % sid)
         pipe.delete("lb:s:%s:h" % sid)
-        pipe.execute()
+
+    g.db.transaction(trans, 'lb:s:%s' % sid)
+
     if request.json:
         return jsonify()
     return "ok\n"
@@ -153,27 +165,30 @@ def trigger(sid):
 
 def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
     now = get_ts()
-    conf_present, old_conf = load_service_config(sid)
-    new_conf = copy.deepcopy(old_conf)
     new_lbls = set([l.lower() for l in new_lbls])
-    old_lbls = set(new_conf.get('labels', []))
-    if new_lbls:
-        new_conf['labels'] = sorted(new_lbls)
-    if ehb is not None or whb is not None:
-        if whb is not None and ehb is not None and whb > ehb:
-            whb = None
-        new_conf['heartbeat']['error'] = ehb
-        new_conf['heartbeat']['warning'] = whb
-    if new_conf.get('maint', {}).get('type') == 'soft':
-        del new_conf['maint']
-    with g.db.pipeline() as pipe:
+    if whb is not None and ehb is not None and whb > ehb:
+        whb = None
+
+    def trans(pipe):
+        conf_present, old_conf = load_service_config(pipe, sid)
+        new_conf = copy.deepcopy(old_conf)
+        old_lbls = set(new_conf.get('labels', []))
+        if new_lbls:
+            new_conf['labels'] = sorted(new_lbls)
+        if ehb is not None or whb is not None:
+            new_conf['heartbeat']['error'] = ehb
+            new_conf['heartbeat']['warning'] = whb
+        if new_conf.get('maint', {}).get('type') == 'soft':
+            del new_conf['maint']
+        pipe.multi()
         update_labels(pipe, sid, old_lbls, new_lbls)
         pipe.hset("lb:s:%s" % sid, "last", '%d:1' % now)
         pipe.lpush("lb:s:%s:h" % sid, '%d:1' % now)
         pipe.ltrim("lb:s:%s:h" % sid, 0, MAX_SAVED - 1)
         if not conf_present or new_conf != old_conf:
             pipe.hset("lb:s:%s" % sid, "conf", json.dumps(new_conf))
-        pipe.execute()
+
+    g.db.transaction(trans, 'lb:s:%s' % sid)
 
 
 @app.template_filter('pretty_interval')
