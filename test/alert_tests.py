@@ -1,3 +1,4 @@
+import json
 import unittest
 from base import LovebeatBase
 from werkzeug.datastructures import MultiDict
@@ -47,6 +48,23 @@ class AlertTests(LovebeatBase):
         self.set_ts(151)
         expect_alert('test.one', 'error', 3)
 
+    def test_set_alert_rcpts(self):
+        rcpt1 = "gtalk:foo@example.com"
+        rcpt2 = "email:foo@example.com"
+        rcpt3 = "sms:0015551234"
+        rcpt4 = "sms:0015559999"
+        md = MultiDict([('alert', 'warning:' + rcpt1),
+                        ('alert', 'error:' + rcpt2),
+                        ('alert', 'error:' + rcpt3),
+                        ('alert', 'error:' + rcpt4)])
+        self.app.post('/l/foo', data=md)
+
+        data = json.loads(self.app.get('/l/foo').data)
+        self.assertEquals([rcpt1], data['alerts']['warning'])
+        self.assertEquals(3, len(data['alerts']['error']))
+        self.assertTrue(rcpt2 in data['alerts']['error'])
+        self.assertTrue(rcpt3 in data['alerts']['error'])
+        self.assertTrue(rcpt4 in data['alerts']['error'])
 
 if __name__ == '__main__':
     unittest.main()

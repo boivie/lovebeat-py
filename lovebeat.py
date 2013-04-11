@@ -72,6 +72,37 @@ def update_labels(pipe, sid, old_lbls, new_lbls):
         pipe.srem("lb:services:%s" % lbl, sid)
 
 
+@app.route("/l/<lbl>", methods = ["POST"])
+def update_label(lbl):
+    alert_warning = set()
+    alert_error = set()
+    if request.form:
+        for key, value in request.form.items(multi=True):
+            if key == 'alert':
+                type, rest = value.split(":", 1)
+                if type == 'warning':
+                    alert_warning.add(rest)
+                elif type == 'error':
+                    alert_error.add(rest)
+
+    with g.db.pipeline() as pipe:
+        pipe.multi()
+        pipe.sadd('lb:labels', lbl)
+        config = {'alerts': {'error': list(alert_error),
+                             'warning': list(alert_warning)}}
+        pipe.hset('lb:l:%s' % lbl, 'config', json.dumps(config))
+        pipe.execute()
+    return "ok"
+
+
+@app.route("/l/<lbl>", methods = ["GET"])
+def get_label(lbl):
+    config = g.db.hget('lb:l:%s' % lbl, 'config')
+    if not config:
+        return jsonify()
+    return jsonify(**json.loads(config))
+
+
 @app.route("/s/<sid>/unmaint", methods = ["GET", "POST"])
 def unmaint(sid):
     def trans(pipe):
