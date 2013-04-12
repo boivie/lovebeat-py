@@ -5,7 +5,7 @@ import sys
 import time
 
 from flask import Flask, g, render_template, request, make_response, jsonify
-from flask import redirect, url_for
+from flask import redirect, url_for, Response, stream_with_context
 import redis
 
 sys.stdout = sys.stderr
@@ -381,6 +381,57 @@ def get_list_json(lbl):
 @app.route("/", methods = ["GET"])
 def index():
     return redirect(url_for('.get_list', lbl='all'))
+
+
+def get_labels():
+    fields = ("#", "lb:l:*->config")
+    labels = {}
+    for lbl, config in \
+            chunks(g.db.sort("lb:labels", by="nosort", get=fields), 2):
+        if config:
+            labels[lbl] = json.loads(config)
+    return labels
+
+
+@app.route("/agent/<agent>/alerts.txt", methods = ["GET"])
+def alerts_txt(agent):
+    now = get_ts()
+    services = get_services("all")
+    label_configs = get_labels()
+
+    def generate():
+        def gather_rcpt(labels, status):
+            rcpt = set()
+            for lbl in labels + ["all"]:
+                config = label_configs.get(lbl)
+                if config:
+                    rcpt.update(set(config['alerts'][status]))
+            return list(rcpt)
+
+        # API version
+        yield '1\n'
+
+        for service in services:
+            eval_service(service, now)
+            if service['state']['status'] in ('warning', 'error'):
+                status = service['state']['status']
+                rcpt = gather_rcpt(service['config']['labels'], status)
+                if not rcpt:
+                    continue
+                sid = service['id']
+                seq_id = service['state']['seq_id']
+                yield "SERVICE\n%s\n" % sid
+                yield "ALERTID\n%s\n" % seq_id
+                yield "TYPE\n%s\n" % status
+                yield "TO\n%s\n" % (" ".join(rcpt),)
+                yield "SUBJECT\nDOWN alert: %s is DOWN [#%d]\n" % (sid, seq_id)
+                yield "MESSAGE\n"
+                yield "%s is down with %s status.\n" % (sid, status)
+                yield "\nYours Sincerely\nLovebeat\nEOF\n"
+                yield "ENDSERVICE\n"
+
+        yield "ENDFILE\n"
+    return Response(stream_with_context(generate()), mimetype='text/plain')
 
 
 if app.debug:
