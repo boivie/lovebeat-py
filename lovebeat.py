@@ -121,32 +121,27 @@ def unmaint(sid):
 
 @app.route("/s/<sid>/maint", methods = ["GET", "POST"])
 def maint(sid):
+    now = get_ts()
     type = "soft"
     expiry = 10 * 60
-    if request.json:
-        type = request.json.get('type', type)
-        expiry = int(request.json.get('expiry'), expiry)
-        do_maint(sid, type, expiry)
-        return jsonify()
-    elif request.form:
-        type = request.form.get('type', type)
-        expiry = int(request.form.get('expiry', expiry))
-    do_maint(sid, type, expiry)
-    return "ok\n"
-
-
-def do_maint(sid, type, expiry):
-    now = get_ts()
 
     def trans(pipe):
         state = load_service_state(pipe, sid)
-        state['maint'] = {'type': type,
-                          'expiry': now + expiry}
+        state['maint'] = {'type': type, 'expiry': now + expiry}
         state['status'] = 'maint'
         pipe.multi()
         pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
 
+    if request.json:
+        type = request.json.get('type', type)
+        expiry = int(request.json.get('expiry'), expiry)
+        g.db.transaction(trans, 'lb:s:%s' % sid)
+        return jsonify()
+    elif request.form:
+        type = request.form.get('type', type)
+        expiry = int(request.form.get('expiry', expiry))
     g.db.transaction(trans, 'lb:s:%s' % sid)
+    return "ok\n"
 
 
 @app.route("/s/<sid>/delete", methods = ["POST"])
@@ -169,10 +164,6 @@ def delete(sid):
 
 
 @app.route("/s/<sid>", methods = ["GET", "POST"])
-def trigger_ind(sid):
-    return trigger(sid)
-
-
 @app.route("/s/<sid>/trigger", methods = ["GET", "POST"])
 def trigger(sid):
     if request.json:
@@ -305,7 +296,6 @@ def get_services(lbl):
                    'config': json.loads(conf),
                    'state': json.loads(state)}
         services.append(service)
-    services.sort(lambda a, b: cmp(a['id'], b['id']))
     return services
 
 
@@ -318,6 +308,8 @@ def get_list(lbl):
 
     has_warnings = len([s for s in services if s['state']['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['state']['status'] == 'error']) > 0
+    services.sort(lambda a, b: cmp(a['id'], b['id']))
+
     return render_template("dashboardui.html", services=services,
                            has_warnings=has_warnings,
                            has_errors=has_errors,
@@ -342,6 +334,7 @@ def get_list_raw(lbl):
     has_warnings = len([s for s in services if s['state']['status'] == 'warning']) > 0
     has_errors = len([s for s in services if s['state']['status'] == 'error']) > 0
     has_maint = len([s for s in services if s['state']['status'] == 'maint']) > 0
+    services.sort(lambda a, b: cmp(a['id'], b['id']))
     html = render_template("dashboard.html", services=services,
                            has_warnings=has_warnings,
                            has_errors=has_errors,
