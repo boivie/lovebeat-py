@@ -26,41 +26,122 @@ class AlertTests(LovebeatBase):
                         ('alert', 'error:' + rcpt4)])
         self.app.post('/l/foo', data=md)
 
-    def test_alert_num(self):
-        def expect_alert(sid, status, alert_id):
-            s = self.get_json(sid)['state']
-            self.assertEquals(s['status'], status)
-            self.assertEquals(s['seq_id'], alert_id)
+    def expect_status(self, sid, status):
+        s = self.get_json(sid)['state']
+        self.assertEquals(s['status'], status)
 
-        expect_alert('test.one', 'ok', 0)
-        expect_alert('test.two', 'ok', 0)
+    def expect_alert(self, sid, status, alert_id, state = None):
+        s = self.get_json(sid)['state']
+        self.assertEquals(s['alert']['status'], status)
+        self.assertEquals(s['alert']['id'], alert_id)
+        if state:
+            self.assertEquals(s['alert']['state'], state)
+
+    def expect_claimed(self, sid, agent):
+        s = self.get_json(sid)['state']
+        self.assertEquals(s['alert']['state'], 'claimed')
+        self.assertEquals(s['alert']['claim']['agent'], agent)
+
+    def claim(self, service, alert_id, status, agent):
+        rv = self.app.post('/agent/%s/claim/%s/%s/%s' %
+                           (agent, service, alert_id, status))
+        if rv.data == 'ok':
+            return True
+        elif rv.data == 'already_claimed':
+            return False
+        self.assertFalse(True, "Bad claim return: %s" % rv.data)
+
+    def confirm(self, service, alert_id, status, agent):
+        rv = self.app.post('/agent/%s/confirm/%s/%s/%s' %
+                           (agent, service, alert_id, status))
+        if rv.data == 'ok':
+            return True
+        self.assertFalse(True, "Bad confirm return: %s" % rv.data)
+
+    def test_claimed_perfect(self):
+        """The perfect case - everything is claimed"""
+        self.expect_status('test.one', 'ok')
+        self.expect_alert('test.one', 'ok', 0, 'confirmed')
+        self.expect_status('test.two', 'ok')
+        self.expect_alert('test.two', 'ok', 0, 'confirmed')
 
         self.set_ts(20)
-        expect_alert('test.one', 'warning', 1)
-        expect_alert('test.two', 'ok', 0)
+        self.expect_status('test.one', 'warning')
+        self.expect_alert('test.one', 'warning', 1, 'new')
+        self.expect_status('test.two', 'ok')
+        self.expect_alert('test.two', 'ok', 0, 'confirmed')
+
+        self.assertTrue(self.claim('test.one', 1, 'warning', 'bond'))
+        self.expect_alert('test.one', 'warning', 1, 'claimed')
+
+        self.assertTrue(self.confirm('test.one', 1, 'warning', 'bond'))
+        self.expect_alert('test.one', 'warning', 1, 'confirmed')
 
         self.set_ts(30)
-        expect_alert('test.one', 'error', 1)
-        expect_alert('test.two', 'warning', 1)
+        self.expect_status('test.one', 'error')
+        self.expect_alert('test.one', 'error', 1, 'new')
+        self.expect_status('test.two', 'warning')
+        self.expect_alert('test.two', 'warning', 1, 'new')
+
+        self.assertTrue(self.claim('test.one', 1, 'error', 'bond'))
+        self.expect_alert('test.one', 'error', 1, 'claimed')
+
+        self.assertTrue(self.confirm('test.one', 1, 'error', 'bond'))
+        self.expect_alert('test.one', 'error', 1, 'confirmed')
+
+        # Going straight from 'new' to 'confirmed' - we can do that.
+        self.assertTrue(self.confirm('test.two', 1, 'warning', 'bond'))
+        self.expect_alert('test.two', 'warning', 1, 'confirmed')
 
         self.set_ts(40)
         self.app.post('/s/test.one')
-        expect_alert('test.one', 'ok', 1)
-        expect_alert('test.two', 'error', 1)
+        self.expect_status('test.one', 'ok')
+        self.expect_alert('test.one', 'ok', 1, 'new')
+        self.expect_status('test.two', 'error')
+        self.expect_alert('test.two', 'error', 1, 'new')
 
-        self.set_ts(60)
-        expect_alert('test.one', 'warning', 2)
-        expect_alert('test.two', 'error', 1)
+    def test_claimed_duplicates(self):
+        self.expect_status('test.one', 'ok')
+        self.expect_alert('test.one', 'ok', 0, 'confirmed')
 
-        self.set_ts(100)
+        self.set_ts(20)
+        self.expect_status('test.one', 'warning')
+        self.expect_alert('test.one', 'warning', 1, 'new')
+
+        self.assertTrue(self.claim('test.one', 1, 'warning', 'bond'))
+        self.expect_alert('test.one', 'warning', 1)
+        self.expect_claimed('test.one', 'bond')
+
+        # Now, another agent can't claim it.
+        self.assertFalse(self.claim('test.one', 1, 'warning', 'smith'))
+        self.expect_claimed('test.one', 'bond')
+
+        # but claiming it again is not an offense
+        self.assertTrue(self.claim('test.one', 1, 'warning', 'bond'))
+        self.expect_alert('test.one', 'warning', 1)
+        self.expect_claimed('test.one', 'bond')
+
+    def test_must_confirm_before_status_change(self):
+        self.expect_status('test.one', 'ok')
+        self.expect_alert('test.one', 'ok', 0, 'confirmed')
+
+        self.set_ts(20)
+        self.expect_status('test.one', 'warning')
+        self.expect_alert('test.one', 'warning', 1, 'new')
+
+        self.set_ts(30)
+        self.expect_status('test.one', 'error')
+        self.expect_alert('test.one', 'warning', 1, 'new')
+
+        self.set_ts(40)
         self.app.post('/s/test.one')
-        expect_alert('test.one', 'ok', 2)
+        self.expect_status('test.one', 'ok')
+        self.expect_alert('test.one', 'warning', 1, 'new')
 
-        self.app.post('/s/test.one/maint', data=dict(type='soft', expiry=50))
-        expect_alert('test.one', 'maint', 2)
-
-        self.set_ts(151)
-        expect_alert('test.one', 'error', 3)
+        # Confirming it makes the alert status update itself to the current
+        self.assertTrue(self.confirm('test.one', 1, 'warning', 'bond'))
+        self.expect_status('test.one', 'ok')
+        self.expect_alert('test.one', 'ok', 1, 'new')
 
     def test_set_alert_rcpts(self):
         rcpt1 = "gtalk:foo@example.com"

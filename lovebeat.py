@@ -21,6 +21,21 @@ def get_ts():
     return int(time.time())
 
 
+def rvtrans(db, func, *watches, **kwargs):
+    shard_hint = kwargs.pop('shard_hint', None)
+    rv = None
+    with g.db.pipeline(True, shard_hint) as pipe:
+        while 1:
+            try:
+                if watches:
+                    pipe.watch(*watches)
+                rv = func(pipe)
+                pipe.execute()
+                return rv
+            except redis.WatchError:
+                continue
+
+
 def use_test_db(port):
     global pool
     pool = redis.ConnectionPool(host='localhost', port=port, db=0)
@@ -55,7 +70,8 @@ def load_service_config(pipe, sid):
 def load_service_state(pipe, sid):
     state = pipe.hget("lb:s:%s" % sid, "state")
     if not state:
-        return {'last': {}, 'status': 'ok', 'seq_id': 0}
+        alert = {'status': 'ok', 'id': 0, 'state': 'confirmed'}
+        return {'last': {}, 'status': 'ok', 'alert': alert}
     return json.loads(state)
 
 
@@ -214,7 +230,6 @@ def do_trigger(sid, new_lbls = None, whb = None, ehb = None):
             del state['maint']
         pipe.multi()
         update_labels(pipe, sid, old_lbls, new_lbls)
-        state['status'] = 'ok'
         state['last']['ts'] = now
         state['last']['val'] = 1
         pipe.hset("lb:s:%s" % sid, "state", json.dumps(state))
@@ -265,22 +280,42 @@ def eval_status(conf, state, now):
     return new_status
 
 
-def eval_service(service, now):
+def update_alert(service, now):
+    state = service['state']
+    alert_status = state['alert']['status']
+    status = 'ok' if state['status'] == 'maint' else state['status']
+    # can we do a status transition?
+    if alert_status != status and state['alert']['state'] == 'confirmed':
+        def trans(pipe):
+            state['alert'] = {'id': state['alert']['id'],
+                              'status': status,
+                              'state': 'new',
+                              'ts': get_ts()}
+            if alert_status == 'ok':
+                state['alert']['id'] += 1
+
+            pipe.multi()
+            pipe.hset('lb:s:%s' % service['id'], 'state', json.dumps(state))
+        g.db.transaction(trans, 'lb:s:%s' % service['id'])
+
+
+def update_status(service, now):
     old_status = service['state']['status']
     new_status = eval_status(service['config'], service['state'], now)
     if new_status != old_status:
         def trans(pipe):
             state = load_service_state(pipe, service['id'])
-            old_status = state['status']
-            new_status = eval_status(service['config'], state, now)
-            pipe.multi()
-            if new_status != old_status:
-                if old_status in ('ok', 'maint'):
-                    state['seq_id'] += 1
-                state['status'] = new_status
-                pipe.hset('lb:s:%s' % service['id'], 'state', json.dumps(state))
+            state['status'] = eval_status(service['config'], state, now)
             service['state'] = state
+
+            pipe.multi()
+            pipe.hset('lb:s:%s' % service['id'], 'state', json.dumps(state))
         g.db.transaction(trans, 'lb:s:%s' % service['id'])
+
+
+def eval_service(service, now):
+    update_status(service, now)
+    update_alert(service, now)
 
     last_heartbeat = now - service['state']['last'].get('ts', 0)
     service['state']['last']['delta'] = last_heartbeat
@@ -393,6 +428,56 @@ def get_labels():
     return labels
 
 
+def plain(t):
+    return Response(t, mimetype='text/plain')
+
+
+@app.route("/agent/<agent>/claim/<service>/<int:alert_id>/<status>",
+           methods = ["POST"])
+def claim(agent, service, alert_id, status):
+    def trans(pipe):
+        state = load_service_state(pipe, service)
+        # claiming an old alert - a race condition.
+        if state['alert']['id'] != alert_id:
+            return plain("already_claimed")
+        if state['alert']['status'] != status:
+            return plain("already_claimed")
+        # Already claimed?
+        if 'claim' in state['alert']:
+            if state['alert']['claim']['agent'] == agent:
+                return plain("ok")
+            else:
+                return plain("already_claimed")
+        if state['alert']['state'] != 'new':
+            return plain('already_claimed')
+        pipe.multi()
+        state['alert']['state'] = 'claimed'
+        state['alert']['claim'] = {'agent': agent}
+        pipe.hset('lb:s:%s' % service, 'state', json.dumps(state))
+        return plain("ok")
+    return rvtrans(g.db, trans, 'lb:s:%s' % service)
+
+
+@app.route("/agent/<agent>/confirm/<service>/<int:alert_id>/<status>",
+           methods = ["POST"])
+def confirm(agent, service, alert_id, status):
+    def trans(pipe):
+        state = load_service_state(pipe, service)
+        # confirming an old alert - a race condition.
+        if state['alert']['state'] in ('new', 'claimed') and \
+                state['alert']['id'] == alert_id and \
+                state['alert']['status'] == status:
+            pass
+        else:
+            return plain('already_confirmed')
+        pipe.multi()
+        state['alert']['state'] = 'confirmed'
+        state['alert']['confirmed'] = {'agent': agent}
+        pipe.hset('lb:s:%s' % service, 'state', json.dumps(state))
+        return plain("ok")
+    return rvtrans(g.db, trans, 'lb:s:%s' % service)
+
+
 @app.route("/agent/<agent>/alerts.txt", methods = ["GET"])
 def alerts_txt(agent):
     now = get_ts()
@@ -419,12 +504,12 @@ def alerts_txt(agent):
                 if not rcpt:
                     continue
                 sid = service['id']
-                seq_id = service['state']['seq_id']
+                alert_id = service['state']['alert']['id']
                 yield "SERVICE\n%s\n" % sid
-                yield "ALERTID\n%s\n" % seq_id
+                yield "ALERTID\n%s\n" % alert_id
                 yield "TYPE\n%s\n" % status
                 yield "TO\n%s\n" % (" ".join(rcpt),)
-                yield "SUBJECT\nDOWN alert: %s is DOWN [#%d]\n" % (sid, seq_id)
+                yield "SUBJECT\nDOWN alert: %s is DOWN [#%d]\n" % (sid, alert_id)
                 yield "MESSAGE\n"
                 yield "%s is down with %s status.\n" % (sid, status)
                 yield "\nYours Sincerely\nLovebeat\nEOF\n"
