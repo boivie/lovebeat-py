@@ -30,12 +30,14 @@ class AlertTests(LovebeatBase):
         s = self.get_json(sid)['state']
         self.assertEquals(s['status'], status)
 
-    def expect_alert(self, sid, status, alert_id, state = None):
+    def expect_alert(self, sid, status, alert_id, state = None, ts = None):
         s = self.get_json(sid)['state']
         self.assertEquals(s['alert']['status'], status)
         self.assertEquals(s['alert']['id'], alert_id)
         if state:
             self.assertEquals(s['alert']['state'], state)
+        if ts:
+            self.assertEquals(s['alert']['ts'] - self.EPOCH, ts)
 
     def expect_claimed(self, sid, agent):
         s = self.get_json(sid)['state']
@@ -61,15 +63,15 @@ class AlertTests(LovebeatBase):
     def test_claimed_perfect(self):
         """The perfect case - everything is claimed"""
         self.expect_status('test.one', 'ok')
-        self.expect_alert('test.one', 'ok', 0, 'confirmed')
+        self.expect_alert('test.one', 'ok', 0, 'confirmed', ts=0)
         self.expect_status('test.two', 'ok')
-        self.expect_alert('test.two', 'ok', 0, 'confirmed')
+        self.expect_alert('test.two', 'ok', 0, 'confirmed', ts=0)
 
         self.set_ts(20)
         self.expect_status('test.one', 'warning')
-        self.expect_alert('test.one', 'warning', 1, 'new')
+        self.expect_alert('test.one', 'warning', 1, 'new', ts=20)
         self.expect_status('test.two', 'ok')
-        self.expect_alert('test.two', 'ok', 0, 'confirmed')
+        self.expect_alert('test.two', 'ok', 0, 'confirmed', ts=0)
 
         self.assertTrue(self.claim('test.one', 1, 'warning', 'bond'))
         self.expect_alert('test.one', 'warning', 1, 'claimed')
@@ -79,9 +81,9 @@ class AlertTests(LovebeatBase):
 
         self.set_ts(30)
         self.expect_status('test.one', 'error')
-        self.expect_alert('test.one', 'error', 1, 'new')
+        self.expect_alert('test.one', 'error', 1, 'new', ts=30)
         self.expect_status('test.two', 'warning')
-        self.expect_alert('test.two', 'warning', 1, 'new')
+        self.expect_alert('test.two', 'warning', 1, 'new', ts=30)
 
         self.assertTrue(self.claim('test.one', 1, 'error', 'bond'))
         self.expect_alert('test.one', 'error', 1, 'claimed')
@@ -93,12 +95,14 @@ class AlertTests(LovebeatBase):
         self.assertTrue(self.confirm('test.two', 1, 'warning', 'bond'))
         self.expect_alert('test.two', 'warning', 1, 'confirmed')
 
-        self.set_ts(40)
+        self.set_ts(35)
         self.app.post('/s/test.one')
+
+        self.set_ts(40)
         self.expect_status('test.one', 'ok')
-        self.expect_alert('test.one', 'ok', 1, 'new')
+        self.expect_alert('test.one', 'ok', 1, 'new', ts=40)
         self.expect_status('test.two', 'error')
-        self.expect_alert('test.two', 'error', 1, 'new')
+        self.expect_alert('test.two', 'error', 1, 'new', ts=40)
 
     def test_claimed_duplicates(self):
         self.expect_status('test.one', 'ok')

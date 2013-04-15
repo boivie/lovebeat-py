@@ -12,6 +12,8 @@ class LovebeatCoreBase(unittest.TestCase):
 
 
 class LovebeatBase(LovebeatCoreBase):
+    EPOCH = 1364774400
+
     def setUp(self):
         super(LovebeatBase, self).setUp()
         self.set_ts(0)
@@ -25,8 +27,7 @@ class LovebeatBase(LovebeatCoreBase):
         r.set("DBTRACE", tracer)
 
     def set_ts(self, ts):
-        EPOCH = 1364774400
-        lovebeat.app.config['TESTING_TS'] = EPOCH + ts
+        lovebeat.app.config['TESTING_TS'] = self.EPOCH + ts
 
     def expect(self, service, status, when=None):
         if when is not None:
