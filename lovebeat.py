@@ -443,12 +443,12 @@ def claim(agent, service, alert_id, status):
         if state['alert']['status'] != status:
             return plain("already_claimed")
         # Already claimed?
-        if 'claim' in state['alert']:
+        if state['alert']['state'] == 'claimed':
             if state['alert']['claim']['agent'] == agent:
                 return plain("ok")
             else:
                 return plain("already_claimed")
-        if state['alert']['state'] != 'new':
+        elif state['alert']['state'] != 'new':
             return plain('already_claimed')
         pipe.multi()
         state['alert']['state'] = 'claimed'
@@ -468,6 +468,11 @@ def confirm(agent, service, alert_id, status):
                 state['alert']['id'] == alert_id and \
                 state['alert']['status'] == status:
             pass
+        # confirming an already confirmed alert - client retrying?
+        elif state['alert']['state'] == 'confirmed' and \
+                state['alert']['id'] == alert_id and \
+                state['alert']['status'] == status:
+            return plain('ok')
         else:
             return plain('already_confirmed')
         pipe.multi()

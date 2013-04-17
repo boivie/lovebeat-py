@@ -58,6 +58,8 @@ class AlertTests(LovebeatBase):
                            (agent, service, alert_id, status))
         if rv.data == 'ok':
             return True
+        elif rv.data == 'already_confirmed':
+            return False
         self.assertFalse(True, "Bad confirm return: %s" % rv.data)
 
     def test_claimed_perfect(self):
@@ -146,6 +148,67 @@ class AlertTests(LovebeatBase):
         self.assertTrue(self.confirm('test.one', 1, 'warning', 'bond'))
         self.expect_status('test.one', 'ok')
         self.expect_alert('test.one', 'ok', 1, 'new')
+
+    def test_out_of_sequence(self):
+        self.expect_status('test.one', 'ok')
+        self.expect_alert('test.one', 'ok', 0, 'confirmed')
+
+        self.set_ts(20)
+        self.expect_status('test.one', 'warning')
+        self.expect_alert('test.one', 'warning', 1, 'new')
+
+        self.assertTrue(self.claim('test.one', 1, 'warning', 'bond'))
+        self.expect_alert('test.one', 'warning', 1)
+        self.expect_claimed('test.one', 'bond')
+
+        self.assertTrue(self.confirm('test.one', 1, 'warning', 'bond'))
+        self.expect_status('test.one', 'warning')
+        self.expect_alert('test.one', 'warning', 1, 'confirmed')
+
+        # now we can't claim it again - it's confirmed.
+        self.assertFalse(self.claim('test.one', 1, 'warning', 'bond'))
+        self.expect_alert('test.one', 'warning', 1, 'confirmed')
+
+        self.set_ts(30)
+        self.app.post('/s/test.one')
+        self.expect_alert('test.one', 'ok', 1, 'new')
+        self.assertTrue(self.confirm('test.one', 1, 'ok', 'bond'))
+
+        self.set_ts(60)
+        self.expect_alert('test.one', 'error', 2, 'new')
+
+        # we can't claim no 1 again - it's now no 2!
+        self.assertFalse(self.claim('test.one', 1, 'error', 'bond'))
+        self.expect_alert('test.one', 'error', 2, 'new')
+
+        # and we can't claim it as the wrong type either.
+        self.assertFalse(self.claim('test.one', 2, 'warning', 'bond'))
+        self.expect_alert('test.one', 'error', 2, 'new')
+
+        # but it is claimable - with the right id and type.
+        self.assertTrue(self.claim('test.one', 2, 'error', 'bond'))
+        self.expect_alert('test.one', 'error', 2)
+        self.expect_claimed('test.one', 'bond')
+
+        # and confirmable...
+        self.assertTrue(self.confirm('test.one', 2, 'error', 'bond'))
+        self.expect_status('test.one', 'error')
+        self.expect_alert('test.one', 'error', 2, 'confirmed')
+
+        # ... even if we stutter and repeat ourselves.
+        self.assertTrue(self.confirm('test.one', 2, 'error', 'bond'))
+        self.expect_status('test.one', 'error')
+        self.expect_alert('test.one', 'error', 2, 'confirmed')
+
+        # but only with the right ID
+        self.assertFalse(self.confirm('test.one', 3, 'error', 'bond'))
+        self.expect_status('test.one', 'error')
+        self.expect_alert('test.one', 'error', 2, 'confirmed')
+
+        # and type
+        self.assertFalse(self.confirm('test.one', 2, 'warning', 'bond'))
+        self.expect_status('test.one', 'error')
+        self.expect_alert('test.one', 'error', 2, 'confirmed')
 
     def test_set_alert_rcpts(self):
         rcpt1 = "gtalk:foo@example.com"
