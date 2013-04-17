@@ -10,7 +10,7 @@
       <h1>All Labels</h1>
       <ul class="labels">
         <li><a href="{{url_for('.get_list', lbl='all')}}">All services</a></li>
-{% for label in labels -%}
+{% for label in labels if label != 'all' -%}
         <li><a href="{{url_for('.get_list', lbl=label)}}">{{label}}</a></li>
 {% endfor -%}
       </ul>
